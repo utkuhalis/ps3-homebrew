@@ -1,0 +1,14 @@
+# Derleme ciktilari
+build/
+build-test/
+*.elf
+*.self
+*.pkg
+*.map
+
+# Gorsellerden uretilen ham piksel verisi (assets/*.png kaynaktan uretilir)
+data/
+*.bin
+
+# macOS
+.DS_Store

@@ -1,0 +1,25 @@
+# Cg shader derleyici imaji.
+#
+# Neden ayri bir imaj: cgcomp, NVIDIA Cg Toolkit'in libCg kutuphanesine
+# ihtiyac duyar ve Cg Toolkit yalnizca x86/x86_64 icin vardir - arm64'te
+# calismaz. Bu yuzden shader derlemesi amd64 (Rosetta) container'inda yapilir,
+# uretilen .vpo/.fpo binary'leri mimariden bagimsizdir (RSX mikrokodu) ve
+# asil PS3 derlemesi native arm64 imajinda devam eder.
+FROM --platform=linux/amd64 debian:12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# nvidia-cg-toolkit Debian'da non-free bileseninde
+RUN sed -i 's/^Components: main$/Components: main contrib non-free/' \
+        /etc/apt/sources.list.d/debian.sources && \
+    apt-get -y update && \
+    apt-get -y install --no-install-recommends \
+        build-essential ca-certificates git nvidia-cg-toolkit && \
+    apt-get -y clean && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 https://github.com/ps3dev/PSL1GHT /build/PSL1GHT && \
+    make -C /build/PSL1GHT/tools/cgcomp && \
+    cp /build/PSL1GHT/tools/cgcomp/cgcomp /usr/local/bin/cgcomp && \
+    rm -rf /build/PSL1GHT
+
+WORKDIR /project

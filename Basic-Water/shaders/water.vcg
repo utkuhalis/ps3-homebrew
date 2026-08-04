@@ -1,0 +1,29 @@
+/* Deniz duzlemi - vertex programi.
+ *
+ * MVP matrisi tek bir float4x4 uniform'u yerine DORT AYRI float4 satiri olarak
+ * gonderilir. Boylece matrisin sabit register'lara hangi duzende yerlestigi
+ * konusundaki belirsizlik ortadan kalkar: her satirin nokta carpimini burada
+ * acikca yaziyoruz. */
+void main
+(
+	float3 vertexPosition : POSITION,
+
+	uniform float4 mvpRow0,
+	uniform float4 mvpRow1,
+	uniform float4 mvpRow2,
+	uniform float4 mvpRow3,
+	uniform float3 worldOffset,
+
+	out float4 ePosition : POSITION,
+	out float4 oWorldPos : TEXCOORD0
+)
+{
+	float4 pos = float4(vertexPosition, 1.0f);
+
+	ePosition = float4(dot(mvpRow0, pos),
+	                   dot(mvpRow1, pos),
+	                   dot(mvpRow2, pos),
+	                   dot(mvpRow3, pos));
+
+	oWorldPos = float4(vertexPosition + worldOffset, 1.0f);
+}

@@ -1,0 +1,31 @@
+/* Deniz duzlemi - fragment programi.
+ * Izgara cizgileri prosedureldir (texture yok); mesafeyle gokyuzu rengine solar. */
+void main
+(
+	float4 worldPos : TEXCOORD0,
+
+	uniform float3 eyePosition,
+	uniform float3 waterColor,
+	uniform float3 gridColor,
+	uniform float3 skyColor,
+	uniform float  gridSpacing,
+	uniform float  fogDistance,
+
+	out float4 oColor
+)
+{
+	/* dunya koordinatinin tekrarina gore izgara */
+	float2 g = worldPos.xz / gridSpacing;
+	float2 d = abs(frac(g) - 0.5f);
+	float  line = min(d.x, d.y);
+	float  grid = 1.0f - smoothstep(0.0f, 0.04f, line);
+
+	float3 base = lerp(waterColor, gridColor, grid);
+
+	/* mesafe solmasi: uzak su gokyuzune karisir, ufuk boylece dogal olusur */
+	float dist = distance(eyePosition, worldPos.xyz);
+	float fog = saturate(dist / fogDistance);
+	fog = fog * fog;
+
+	oColor = float4(lerp(base, skyColor, fog), 1.0f);
+}
