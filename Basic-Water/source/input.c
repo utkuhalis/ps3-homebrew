@@ -30,8 +30,12 @@ static unsigned int pack(const padData *p)
 {
     unsigned int b = 0;
 
-    if (p->BTN_UP)     b |= PAD_UP;
-    if (p->BTN_DOWN)   b |= PAD_DOWN;
+    if (p->BTN_UP)       b |= PAD_UP;
+    if (p->BTN_DOWN)     b |= PAD_DOWN;
+    if (p->BTN_LEFT)     b |= PAD_LEFT;
+    if (p->BTN_RIGHT)    b |= PAD_RIGHT;
+    if (p->BTN_SQUARE)   b |= PAD_SQUARE;
+    if (p->BTN_TRIANGLE) b |= PAD_TRIANGLE;
     if (p->BTN_CROSS)  b |= PAD_CROSS;
     if (p->BTN_CIRCLE) b |= PAD_CIRCLE;
     if (p->BTN_START)  b |= PAD_START;
@@ -74,36 +78,38 @@ void input_update(void)
 
     ioPadGetInfo(&padinfo);
 
-    axis_lx = axis_ly = axis_rx = axis_ry = 0.0f;
-
     for (i = 0; i < PP_MAX_PADS; i++) {
         prev_btn[i] = cur_btn[i];
 
-        if (padinfo.status[i] != 0 && ioPadGetData(i, &data) == 0) {
-            connected[i] = 1;
+        if (padinfo.status[i] == 0) {
+            /* kol cikarildi: tuslar birakilmis, cubuklar merkezde sayilir */
+            connected[i] = 0;
+            cur_btn[i] = 0;
+            if (i == 0) {
+                axis_lx = axis_ly = 0.0f;
+                axis_rx = axis_ry = 0.0f;
+            }
+            continue;
+        }
+
+        connected[i] = 1;
+
+        /* PS3 pad API'si her karede veri vermez. data.len == 0 ise bu karede
+         * YENI VERI YOKTUR ve yapinin icerigi gecersizdir (eksenler 0 gelir).
+         * Bu kontrol olmadan eksenler "cubuk sonuna kadar itilmis" gibi
+         * okunur ve kamera kendi kendine surukleni r. Veri yoksa onceki
+         * karenin durumu korunur. */
+        if (ioPadGetData(i, &data) == 0 && data.len > 0) {
             cur_btn[i] = pack(&data);
 
-            /* Eksenler yalnizca 1. koldan okunur. Analog verisi hic gelmiyorsa
-             * (tum eksenler 0) eksen degerleri 0 birakilir; asagida d-pad
-             * yedegi devreye girer. */
-            if (i == 0 && !(data.ANA_L_H == 0 && data.ANA_L_V == 0 &&
-                            data.ANA_R_H == 0 && data.ANA_R_V == 0)) {
+            if (i == 0) {
                 axis_lx = axis_norm(data.ANA_L_H);
                 axis_ly = axis_norm(data.ANA_L_V);
                 axis_rx = axis_norm(data.ANA_R_H);
                 axis_ry = axis_norm(data.ANA_R_V);
             }
-        } else {
-            connected[i] = 0;
-            cur_btn[i] = 0;     /* kol cikarilirsa tuslar birakilmis sayilir */
         }
-    }
-
-    /* Analog yoksa d-pad ile ileri/geri ve donus yine de mumkun olsun
-     * (RPCS3 klavye modunda oynanabilirlik icin). */
-    if (axis_ly == 0.0f) {
-        if (cur_btn[0] & PAD_UP)   axis_ly = -1.0f;
-        if (cur_btn[0] & PAD_DOWN) axis_ly =  1.0f;
+        /* data.len == 0: cur_btn ve eksenler oldugu gibi birakilir */
     }
 }
 
@@ -158,7 +164,43 @@ int input_any_dir_pressed(void)
     return 0;
 }
 
-float input_axis_left_x(void)  { return axis_lx; }
-float input_axis_left_y(void)  { return axis_ly; }
-float input_axis_right_x(void) { return axis_rx; }
-float input_axis_right_y(void) { return axis_ry; }
+/* Analog cubuk yoksa (orn. emulatorde klavye) yon tuslari ve omuz tuslari
+ * tam guc yedek olarak devreye girer; boylece kamera her ortamda surulebilir.
+ * Analog varsa o oncelikli, cunku orantili hiz veriyor. */
+static float axis_or(float a, float dpad)
+{
+    float aa = a < 0.0f ? -a : a;
+    return aa > 0.05f ? a : dpad;
+}
+
+float input_axis_left_x(void)
+{
+    float d = 0.0f;
+    if (input_held(0, PAD_LEFT))  d = -1.0f;
+    if (input_held(0, PAD_RIGHT)) d =  1.0f;
+    return axis_or(axis_lx, d);
+}
+
+float input_axis_left_y(void)
+{
+    float d = 0.0f;
+    if (input_held(0, PAD_UP))   d = -1.0f;
+    if (input_held(0, PAD_DOWN)) d =  1.0f;
+    return axis_or(axis_ly, d);
+}
+
+float input_axis_right_x(void)
+{
+    float d = 0.0f;
+    if (input_held(0, PAD_SQUARE)) d = -1.0f;   /* sola bak */
+    if (input_held(0, PAD_CIRCLE)) d =  1.0f;   /* saga bak */
+    return axis_or(axis_rx, d);
+}
+
+float input_axis_right_y(void)
+{
+    float d = 0.0f;
+    if (input_held(0, PAD_TRIANGLE)) d = -1.0f; /* yukari bak */
+    if (input_held(0, PAD_CROSS))    d =  1.0f; /* asagi bak */
+    return axis_or(axis_ry, d);
+}

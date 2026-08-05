@@ -1,0 +1,31 @@
+/* Gokyuzu - vertex programi.
+ *
+ * Ekrani kaplayan dortgen dogrudan clip uzayinda verilir. Her kose icin
+ * dunya uzayindaki bakis yonu, kamera eksenlerinden burada hesaplanir;
+ * vertex ozniteligiyle tasimak yerine uniform kullanmak daha guvenilir. */
+void main
+(
+	float3 vertexPosition : POSITION,
+	float3 vertexNormal   : NORMAL,
+	float2 vertexTexcoord : TEXCOORD0,
+
+	/* RSX sabit register'lari dort bilesenlidir; float3/float2 yerine float4
+	 * kullanmak degerlerin eksiksiz ulasmasini garantiler. */
+	uniform float4 camFwd,
+	uniform float4 camRight,
+	uniform float4 camUp,
+	uniform float4 tanHalf,
+
+	out float4 ePosition : POSITION,
+	out float4 oRayDir   : TEXCOORD0
+)
+{
+	float2 ndc = vertexPosition.xy;
+
+	ePosition = float4(ndc, 0.999f, 1.0f);
+	oRayDir   = float4(camFwd.xyz
+	                   + camRight.xyz * (ndc.x * tanHalf.x)
+	                   + camUp.xyz    * (ndc.y * tanHalf.y), 0.0f)
+	            + float4(vertexNormal, 0.0f) * 0.0f
+	            + float4(vertexTexcoord, 0.0f, 0.0f) * 0.0f;
+}

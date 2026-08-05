@@ -33,6 +33,8 @@ int main(int argc, const char *argv[])
     Camera cam;
     Mat4 proj;
     int rc;
+    unsigned long frames = 0;
+    float time_sec;
 
     (void)argc;
     (void)argv;
@@ -88,8 +90,10 @@ int main(int argc, const char *argv[])
 
         camera_update(&cam, forward, strafe, updown, yaw_in, pitch_in, DT);
 
+        time_sec = (float)(frames++) / 60.0f;
+
         rsx3d_begin_frame(SKY_CLEAR_COLOR);
-        scene_draw(&cam, &proj);
+        scene_draw(&cam, &proj, time_sec);
         rsx3d_end_frame();
     }
 

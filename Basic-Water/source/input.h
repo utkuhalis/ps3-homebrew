@@ -12,6 +12,10 @@
 #define PAD_SELECT  (1u << 5)
 #define PAD_L1      (1u << 6)
 #define PAD_R1      (1u << 7)
+#define PAD_LEFT    (1u << 8)
+#define PAD_RIGHT   (1u << 9)
+#define PAD_SQUARE  (1u << 10)
+#define PAD_TRIANGLE (1u << 11)
 
 #define PP_MAX_PADS 2
 

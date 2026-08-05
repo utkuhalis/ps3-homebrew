@@ -18,18 +18,27 @@ Menulu, tam oynanabilir bir ping pong oyunu.
 - Arkaplan gorseli destegi (derleme sirasinda ham piksele cevrilip gomulur)
 - 29 birim testi
 
-### [Basic Water](Basic-Water/) — yarim kaldi
+### [Basic Water](Basic-Water/) — calisir durumda
 
-3D deniz + gokyuzu sahnesi, serbest ucan kamera. Bir flight simulator'un ilk adimi
-olarak tasarlandi.
+3D deniz ve gokyuzu sahnesi, serbest ucan kamera. Bir flight simulator'un ilk
+adimi olarak tasarlandi.
 
-Calisan kisimlar: Docker ortami (Cg shader derleme dahil), matris ve kamera
-matematigi (30 birim testi), shader derleme zinciri, `.self`/`.pkg` uretimi.
+![Basic Water](docs/basic-water.png)
 
-**Bilinen sorun:** PS3'te sahne ekrana cizilmiyor. Program aciliyor, 60 FPS'te
-donuyor ve gokyuzu rengi geliyor, ancak deniz geometrisi gorunmuyor. Vertex
-verisi shader'a ulasmiyor gibi gorunuyor. PSL1GHT'in kendi 3D ornegi ayni
-ortamda sorunsuz calistigi icin hata bu projenin cizim kodunda.
+*RPCS3'te 60 FPS. Goruntudeki hicbir sey hazir doku degil; gokyuzu, gunes,
+bulutlar ve su tamamen shader'da hesaplaniyor.*
+
+- **Gokyuzu:** ufuktan zenite gradyan, gunes diski ve halesi, ruzgarla suzulen
+  bulutlar (prosedurel desen, texture yok)
+- **Su:** iki buyuk dalga geometride, iki ince dalga piksel basina normal
+  olarak; Fresnel'e bagli gokyuzu yansimasi, gunes parlamasi, mesafe sisi
+- **Kamera:** serbest ucus, su yuzeyinin altina inemez
+- 30 birim testi (matris, kamera, carpisma)
+
+Gokyuzu ve su formullerinin C karsiliklari (`source/skycolor.c`,
+`source/waves.c`) shader'larla birebir ayni tutulur; `tests/scene_preview.c`
+bunlari host'ta isin atarak render eder, boylece sahne konsola gitmeden
+dogrulanabilir.
 
 ## Derleme
 

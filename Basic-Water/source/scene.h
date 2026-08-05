@@ -9,6 +9,6 @@
 #define SKY_CLEAR_COLOR  0x7CA8F0   /* gokyuzu mavisi (XRGB) - ekran temizleme */
 
 int  scene_init(void);
-void scene_draw(const Camera *cam, const Mat4 *proj);
+void scene_draw(const Camera *cam, const Mat4 *proj, float time);
 
 #endif

@@ -1,29 +1,51 @@
-/* Deniz duzlemi - vertex programi.
+/* Deniz yuzeyi - vertex programi.
  *
- * MVP matrisi tek bir float4x4 uniform'u yerine DORT AYRI float4 satiri olarak
- * gonderilir. Boylece matrisin sabit register'lara hangi duzende yerlestigi
- * konusundaki belirsizlik ortadan kalkar: her satirin nokta carpimini burada
- * acikca yaziyoruz. */
+ * Dalga formulunun C karsiligi source/waves.c icindedir, BIREBIR ayni
+ * tutulmalidir. Yukseklik ve yuzey normali burada hesaplanip fragment'a
+ * tasinir; normal dogru olmazsa parlama ve yansima yanlis gorunur. */
 void main
 (
 	float3 vertexPosition : POSITION,
+	float3 vertexNormal   : NORMAL,
+	float2 vertexTexcoord : TEXCOORD0,
 
-	uniform float4 mvpRow0,
-	uniform float4 mvpRow1,
-	uniform float4 mvpRow2,
-	uniform float4 mvpRow3,
-	uniform float3 worldOffset,
+	uniform float4x4 mvpMatrix,
+	uniform float    timeSec,
+	uniform float2   worldOffset,
 
 	out float4 ePosition : POSITION,
-	out float4 oWorldPos : TEXCOORD0
+	out float4 oWorldPos : TEXCOORD0,
+	out float4 oNormal   : TEXCOORD1
 )
 {
-	float4 pos = float4(vertexPosition, 1.0f);
+	float3 p = vertexPosition + vertexNormal * 0.0f
+	           + float3(vertexTexcoord, 0.0f) * 0.0f;
 
-	ePosition = float4(dot(mvpRow0, pos),
-	                   dot(mvpRow1, pos),
-	                   dot(mvpRow2, pos),
-	                   dot(mvpRow3, pos));
+	/* Geometride yalnizca buyuk iki dalga tasinir; kucuk dalgalar izgara
+	 * cozunurlugune sigmadigi icin fragment tarafinda normal olarak eklenir. */
+	float4 dirX  = float4( 1.00f,  0.62f, 0.0f, 0.0f);
+	float4 dirZ  = float4( 0.00f,  0.78f, 0.0f, 0.0f);
+	float4 len   = float4(140.0f, 74.0f,  1.0f, 1.0f);
+	float4 amp   = float4(  1.10f, 0.62f, 0.0f, 0.0f);
+	float4 speed = float4(  1.00f, 1.35f, 0.0f, 0.0f);
 
-	oWorldPos = float4(vertexPosition + worldOffset, 1.0f);
+	float4 k = 6.28318531f / len;
+	/* Dalga fazi DUNYA koordinatindan hesaplanir. Duzlem kamerayla birlikte
+	 * kaydigi icin yerel koordinat kullanilirsa desen de kamerayla birlikte
+	 * suruklenir ve deniz sabit durmaz. */
+	float2 wp = float2(p.x + worldOffset.x, p.z + worldOffset.y);
+	float4 phase = (wp.x * dirX + wp.y * dirZ) * k + timeSec * speed * k * 12.0f;
+
+	float4 s = sin(phase);
+	float4 c = cos(phase) * amp * k;
+
+	float h = dot(s, amp);
+	float dhdx = dot(c, dirX);
+	float dhdz = dot(c, dirZ);
+
+	p.y += h;
+
+	ePosition = mul(mvpMatrix, float4(p, 1.0f));
+	oWorldPos = float4(p.x + worldOffset.x, p.y, p.z + worldOffset.y, 1.0f);
+	oNormal   = float4(normalize(float3(-dhdx, 1.0f, -dhdz)), 0.0f);
 }

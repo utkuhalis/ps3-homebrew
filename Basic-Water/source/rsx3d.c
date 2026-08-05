@@ -33,6 +33,27 @@ static u32  depth_pitch = 0;
 
 static u32 scr_w = 0, scr_h = 0;
 
+#define GCM_LABEL_INDEX 255
+
+/* Referans rsxutil'deki waitRSXIdle karsiligi: RSX'in bekleyen tum isleri
+ * bitirmesini bekler. Video modu degistirilmeden once cagrilmasi gerekiyor;
+ * bu adim bizim kodumuzda eksikti. */
+static void wait_rsx_idle(void)
+{
+    u32 label_val = 1;
+
+    rsxSetWriteBackendLabel(context, GCM_LABEL_INDEX, label_val);
+    rsxSetWaitLabel(context, GCM_LABEL_INDEX, label_val);
+
+    label_val++;
+
+    rsxSetWriteBackendLabel(context, GCM_LABEL_INDEX, label_val);
+    rsxFlushBuffer(context);
+
+    while (*(vu32 *)gcmGetLabelAddress(GCM_LABEL_INDEX) != label_val)
+        usleep(30);
+}
+
 static void wait_flip(void)
 {
     while (gcmGetFlipStatus() != 0)
@@ -169,6 +190,8 @@ int rsx3d_init(void)
     vconfig.pitch      = res.width * sizeof(u32);
     vconfig.aspect     = state.displayMode.aspect;
 
+    wait_rsx_idle();
+
     if (videoConfigure(0, &vconfig, NULL, 0) != 0)
         return -5;
     if (videoGetState(0, 0, &state) != 0)
@@ -212,7 +235,7 @@ void rsx3d_begin_frame(u32 clear_color)
     set_draw_env();
 
     rsxSetClearColor(context, clear_color);
-    rsxSetClearDepthStencil(context, 0xffffff00);
+    rsxSetClearDepthStencil(context, 0xffffffff);
     rsxClearSurface(context, GCM_CLEAR_R | GCM_CLEAR_G | GCM_CLEAR_B |
                              GCM_CLEAR_A | GCM_CLEAR_S | GCM_CLEAR_Z);
 }
@@ -222,8 +245,11 @@ void rsx3d_end_frame(void)
     gcmSetFlip(context, cur_buf);
     rsxFlushBuffer(context);
     gcmSetWaitFlip(context);
-    wait_flip();
+
     cur_buf ^= 1;
+    set_render_target(&buffers[cur_buf]);
+
+    wait_flip();
 }
 
 float rsx3d_aspect(void)
