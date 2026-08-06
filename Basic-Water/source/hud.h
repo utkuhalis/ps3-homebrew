@@ -2,6 +2,7 @@
 #define HUD_H
 
 #include "camera.h"
+#include "flight.h"
 
 /* Ucus gostergeleri.
  *
@@ -20,8 +21,8 @@ typedef struct {
 
 void hud_init(Hud *h);
 
-/* dt: saniye. Kameranin yer degistirmesinden hiz turetir, yakiti azaltir. */
-void hud_update(Hud *h, const Camera *cam, float dt);
+/* Degerler artik ucus modelinden gelir: hiz, agirlik ve yakit gercektir. */
+void hud_update(Hud *h, const Flight *f, float dt);
 
 void hud_draw(const Hud *h, const Camera *cam);
 

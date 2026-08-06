@@ -22,6 +22,9 @@ void overlay_begin(void);
  * 3D sahne cizildikten sonra, kare sonunda cagrilir. */
 void overlay_flush(void);
 
+/* Kare icinde cizim tamponu doldu mu (tani icin) */
+int  overlay_overflowed(void);
+
 void overlay_fill_rect(int x, int y, int w, int h, color_t c);
 
 /* alpha: 0..255, arka planla harmanlar (yari saydam paneller icin) */

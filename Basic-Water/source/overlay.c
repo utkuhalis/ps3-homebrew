@@ -17,7 +17,11 @@
  * bound render target"). Bu yuzden tum dikdortgenler bir tamponda toplanip
  * kare sonunda tek cizim cagrisiyla gonderilir. */
 
-#define MAX_RECTS   1600
+/* Her harf ortalama 8 kucuk dortgen demek. HUD, gostergeler, gorev listesi,
+ * mini harita ve menu ayni anda cizildiginde 1600 sinir yetmiyordu ve en son
+ * cizilen (menu) sessizce dusuyordu. Sinir bellek acisindan ucuz: 5000
+ * dortgen = 20000 vertex, 16-bit indeks sinirinin (65536) altinda. */
+#define MAX_RECTS   5000
 #define MAX_VERTS   (MAX_RECTS * 4)
 #define MAX_INDICES (MAX_RECTS * 6)
 
@@ -34,6 +38,7 @@ typedef struct {
 static OvlVertex *verts = NULL;
 static u16       *idx = NULL;
 static int        rect_count = 0;
+static int        overflow = 0;
 
 static rsxVertexProgram   *ovl_vp = (rsxVertexProgram *)overlay_vpo;
 static rsxFragmentProgram *ovl_fp = (rsxFragmentProgram *)overlay_fpo;
@@ -80,6 +85,12 @@ int overlay_init(void)
 void overlay_begin(void)
 {
     rect_count = 0;
+    overflow = 0;
+}
+
+int overlay_overflowed(void)
+{
+    return overflow;
 }
 
 static void push_quad(float cx, float cy, float hw, float hh, float angle,
@@ -91,8 +102,13 @@ static void push_quad(float cx, float cy, float hw, float hh, float angle,
     float ox[4], oy[4];
     int i;
 
-    if (rect_count >= MAX_RECTS || hw <= 0.0f || hh <= 0.0f)
+    if (hw <= 0.0f || hh <= 0.0f)
         return;
+
+    if (rect_count >= MAX_RECTS) {
+        overflow = 1;           /* tanidik olmayan eksik cizim yerine uyari */
+        return;
+    }
 
     /* kose ofsetleri (merkez etrafinda), gerekirse dondurulur */
     ox[0] = -hw; oy[0] = -hh;

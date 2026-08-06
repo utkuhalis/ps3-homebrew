@@ -16,6 +16,8 @@
 #define PAD_RIGHT   (1u << 9)
 #define PAD_SQUARE  (1u << 10)
 #define PAD_TRIANGLE (1u << 11)
+#define PAD_L2      (1u << 12)
+#define PAD_R2      (1u << 13)
 
 #define PP_MAX_PADS 2
 

@@ -49,6 +49,8 @@ static unsigned int pack(const padData *p)
     if (p->BTN_SELECT) b |= PAD_SELECT;
     if (p->BTN_L1)     b |= PAD_L1;
     if (p->BTN_R1)     b |= PAD_R1;
+    if (p->BTN_L2)     b |= PAD_L2;
+    if (p->BTN_R2)     b |= PAD_R2;
 
     /* Analog cubuk: bazi ortamlarda (orn. RPCS3 klavye modu) analog verisi hic
      * gelmez ve tum eksenler 0 kalir. Bunu "cubuk tam yukarida" sanmamak icin,

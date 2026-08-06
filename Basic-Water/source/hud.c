@@ -5,9 +5,6 @@
 #include "overlay.h"
 #include "font.h"
 
-#define EMPTY_WEIGHT_KG  3800.0f    /* yakitsiz agirlik */
-#define FUEL_FULL_KG      900.0f    /* dolu yakitin agirligi */
-#define FUEL_BURN_PCT     0.25f     /* saniyede tuketilen yuzde */
 
 #define COL_LABEL  RGB(150, 190, 220)
 #define COL_VALUE  RGB(245, 250, 255)
@@ -17,37 +14,19 @@
 void hud_init(Hud *h)
 {
     h->fuel_pct = 100.0f;
-    h->weight_kg = EMPTY_WEIGHT_KG + FUEL_FULL_KG;
+    h->weight_kg = EMPTY_MASS_KG + FUEL_FULL_KG;
     h->speed_kmh = 0.0f;
     h->has_prev = 0;
 }
 
-void hud_update(Hud *h, const Camera *cam, float dt)
+void hud_update(Hud *h, const Flight *f, float dt)
 {
-    if (dt <= 0.0f)
-        return;
+    (void)dt;
 
-    if (h->has_prev) {
-        float dx = cam->pos[0] - h->prev_pos[0];
-        float dy = cam->pos[1] - h->prev_pos[1];
-        float dz = cam->pos[2] - h->prev_pos[2];
-        float dist = sqrtf(dx * dx + dy * dy + dz * dz);
-        float inst = (dist / dt) * 3.6f;    /* birim/s -> km/s benzeri olcek */
-
-        /* ani sicramalari yumusat */
-        h->speed_kmh += (inst - h->speed_kmh) * 0.15f;
-    }
-
-    h->prev_pos[0] = cam->pos[0];
-    h->prev_pos[1] = cam->pos[1];
-    h->prev_pos[2] = cam->pos[2];
-    h->has_prev = 1;
-
-    h->fuel_pct -= FUEL_BURN_PCT * dt;
-    if (h->fuel_pct < 0.0f)
-        h->fuel_pct = 0.0f;
-
-    h->weight_kg = EMPTY_WEIGHT_KG + FUEL_FULL_KG * (h->fuel_pct / 100.0f);
+    /* Artik gostermelik degil: degerler dogrudan ucus modelinden geliyor. */
+    h->speed_kmh = flight_speed_kmh(f);
+    h->weight_kg = f->mass_kg;
+    h->fuel_pct = flight_fuel_pct(f);
 }
 
 static void row(int y, const char *label, const char *value, color_t vcol)

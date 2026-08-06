@@ -5,6 +5,10 @@
 #   ./build.sh clean    -> ciktilar temizlenir
 #   ./build.sh test     -> matematik ve kamera birim testlerini calistirir
 #
+#   ./build.sh gonder <PS3_IP>    -> .pkg'yi FTP ile PS3'e kopyalar (kalici kurulum)
+#   ./build.sh calistir <PS3_IP>  -> .self'i ps3load ile dogrudan calistirir (hizli deneme)
+#   ./build.sh log <PS3_IP>       -> PS3'ten teshis kaydini ceker
+#
 # Iki asamali derleme:
 #   1) Cg shader'lari amd64 imajinda derlenir (Cg Toolkit yalnizca x86 icin var)
 #   2) Asil PS3 derlemesi native arm64 ps3dev imajinda yapilir
@@ -39,7 +43,63 @@ if [ "$1" = "test" ]; then
         ./build-test/test_menu &&
         gcc -O1 -Wall -Wextra -o build-test/test_atm tests/test_atmosphere.c \
             source/atmosphere.c -lm &&
-        ./build-test/test_atm'
+        ./build-test/test_atm &&
+        gcc -O1 -Wall -Wextra -o build-test/test_flight tests/test_flight.c \
+            source/flight.c -lm &&
+        ./build-test/test_flight'
+    exit $?
+fi
+
+# --- PS3'e gonderme ---
+#   ./build.sh gonder <PS3_IP>    : .pkg'yi FTP ile PS3'e kopyalar
+#   ./build.sh calistir <PS3_IP>  : .self'i ps3load ile dogrudan calistirir
+if [ "$1" = "gonder" ]; then
+    IP="$2"
+    [ -n "$IP" ] || { echo "Kullanim: ./build.sh gonder <PS3_IP>"; exit 1; }
+    [ -f basicwater.pkg ] || { echo "Once ./build.sh ile derleyin"; exit 1; }
+
+    echo ">>> $IP adresine gonderiliyor (FTP)"
+    if curl -T basicwater.pkg "ftp://$IP/dev_hdd0/packages/" --connect-timeout 10; then
+        echo
+        echo "Gonderildi. PS3'te:"
+        echo "  Package Manager > Install Package Files > basicwater.pkg"
+    else
+        echo
+        echo "Gonderilemedi. Kontrol edin:"
+        echo "  - PS3 ve Mac ayni agda mi"
+        echo "  - PS3'te FTP acik mi (webMAN / multiMAN)"
+        echo "  - IP adresi dogru mu (Ayarlar > Ag Ayarlari > Baglanti Durumu)"
+        exit 1
+    fi
+    exit 0
+fi
+
+if [ "$1" = "log" ]; then
+    IP="$2"
+    [ -n "$IP" ] || { echo "Kullanim: ./build.sh log <PS3_IP>"; exit 1; }
+
+    echo ">>> PS3'ten teshis kaydi aliniyor"
+    if curl -s --connect-timeout 10 "ftp://$IP/dev_hdd0/tmp/basicwater.log" \
+            -o /tmp/basicwater-ps3.log; then
+        echo "--- PS3 kaydi ---"
+        cat /tmp/basicwater-ps3.log
+        echo "--- son ---"
+    else
+        echo "Kayit alinamadi. Oyunu bir kez calistirdiniz mi?"
+        echo "FTP acik mi ve IP dogru mu kontrol edin."
+        exit 1
+    fi
+    exit 0
+fi
+
+if [ "$1" = "calistir" ]; then
+    IP="$2"
+    [ -n "$IP" ] || { echo "Kullanim: ./build.sh calistir <PS3_IP>"; exit 1; }
+    [ -f basicwater.self ] || { echo "Once ./build.sh ile derleyin"; exit 1; }
+
+    echo ">>> $IP adresinde dogrudan calistiriliyor (ps3load)"
+    echo "    PS3'te ps3load / SELF yukleyici acik olmali."
+    $PS3_RUN sh -c "export PS3LOAD=tcp:$IP; /usr/local/ps3dev/bin/ps3load basicwater.self"
     exit $?
 fi
 

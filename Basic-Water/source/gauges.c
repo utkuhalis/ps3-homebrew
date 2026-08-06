@@ -93,11 +93,13 @@ static void draw_attitude(float cx, float cy, float r, float pitch, float roll)
     float ca = cosf(roll), sa = sinf(roll);
     int i;
 
-    /* gokyuzu ve toprak: iki buyuk dondurulmus dikdortgen */
-    overlay_rot_rect(cx + sa * (shift - r), cy - ca * (shift - r),
-                     r * 2.4f, r * 2.0f, -roll, COL_SKY, 235);
-    overlay_rot_rect(cx + sa * (shift + r), cy - ca * (shift + r),
-                     r * 2.4f, r * 2.0f, -roll, COL_GROUND, 235);
+    /* Gokyuzu ve toprak dolgusu. Dondurulmus dikdortgenler daire icine
+     * kirpilamadigi icin gosterge kare cerceveli: dolgu gosterge alanini
+     * asmasin diye olculer cerceveye gore secildi. */
+    overlay_rot_rect(cx + sa * (shift - r * 0.62f), cy - ca * (shift - r * 0.62f),
+                     r * 1.72f, r * 1.30f, -roll, COL_SKY, 240);
+    overlay_rot_rect(cx + sa * (shift + r * 0.62f), cy - ca * (shift + r * 0.62f),
+                     r * 1.72f, r * 1.30f, -roll, COL_GROUND, 240);
 
     /* ufuk cizgisi */
     overlay_rot_rect(cx + sa * shift, cy - ca * shift,
@@ -105,8 +107,8 @@ static void draw_attitude(float cx, float cy, float r, float pitch, float roll)
 
     /* derece merdiveni */
     for (i = -2; i <= 2; i++) {
-        float off = shift + i * r * 0.28f;
-        float len = (i % 2 == 0) ? r * 0.5f : r * 0.28f;
+        float off = shift + i * r * 0.24f;
+        float len = (i % 2 == 0) ? r * 0.44f : r * 0.24f;
 
         if (i == 0)
             continue;
@@ -114,8 +116,16 @@ static void draw_attitude(float cx, float cy, float r, float pitch, float roll)
                          COL_TICK, 170);
     }
 
-    /* cerceve ve sabit ucak isareti */
-    overlay_ring(cx, cy, r, 3.0f, COL_RIM, 235);
+    /* kare cerceve (daire yerine) */
+    {
+        int bx = (int)(cx - r * 0.88f), by = (int)(cy - r * 0.88f);
+        int bw = (int)(r * 1.76f), bh = (int)(r * 1.76f);
+
+        overlay_fill_rect(bx, by, bw, 2, COL_RIM);
+        overlay_fill_rect(bx, by + bh - 2, bw, 2, COL_RIM);
+        overlay_fill_rect(bx, by, 2, bh, COL_RIM);
+        overlay_fill_rect(bx + bw - 2, by, 2, bh, COL_RIM);
+    }
     overlay_fill_rect((int)(cx - 22), (int)(cy - 1), 16, 3, COL_NEEDLE);
     overlay_fill_rect((int)(cx + 6), (int)(cy - 1), 16, 3, COL_NEEDLE);
     overlay_disc(cx, cy, 3.0f, COL_NEEDLE, 250);

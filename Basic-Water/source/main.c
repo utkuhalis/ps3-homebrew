@@ -20,6 +20,10 @@
 #include "minimap.h"
 #include "runway.h"
 #include "waypoint.h"
+#include "flight.h"
+#include "aircraft.h"
+#include "flightcam.h"
+#include "ps3log.h"
 
 SYS_PROCESS_PARAM(1001, 0x100000)
 
@@ -49,24 +53,42 @@ int main(int argc, const char *argv[])
     GameMenu menu;
     Atmosphere atm;
     Objectives objs;
+    Flight plane;
+    CamMode cam_mode = CAM_CHASE;
 
     (void)argc;
     (void)argv;
 
+    ps3log_open();
+    ps3log("basicwater basliyor");
+
     rc = rsx3d_init();
+    ps3log("rsx3d_init -> %d (ekran %dx%d)", rc,
+           (int)rsx3d_width(), (int)rsx3d_height());
     if (rc < 0) {
-        printf("HATA: rsx3d_init basarisiz (%d)\n", rc);
+        ps3log("DURDU: rsx3d_init basarisiz");
+        ps3log_close();
         return 1;
     }
 
     rc = scene_init();
+    ps3log("scene_init -> %d", rc);
     if (rc < 0) {
         printf("HATA: scene_init basarisiz (%d)\n", rc);
         rsx3d_exit();
         return 1;
     }
 
+    rc = aircraft_init();
+    ps3log("aircraft_init -> %d", rc);
+    if (rc < 0) {
+        printf("HATA: aircraft_init basarisiz (%d)\n", rc);
+        rsx3d_exit();
+        return 1;
+    }
+
     rc = runway_init();
+    ps3log("runway_init -> %d", rc);
     if (rc < 0) {
         printf("HATA: runway_init basarisiz (%d)\n", rc);
         rsx3d_exit();
@@ -74,11 +96,14 @@ int main(int argc, const char *argv[])
     }
 
     rc = overlay_init();
+    ps3log("overlay_init -> %d", rc);
     if (rc < 0) {
         printf("HATA: overlay_init basarisiz (%d)\n", rc);
         rsx3d_exit();
         return 1;
     }
+
+    ps3log("tum baslatmalar tamam, ana donguye giriliyor");
 
     if (input_init() != 0) {
         printf("HATA: input_init basarisiz\n");
@@ -93,6 +118,15 @@ int main(int argc, const char *argv[])
     gamemenu_init(&menu);
     atmosphere_compute(&atm, menu.weather, menu.time);
     objectives_init(&objs);
+    {
+        /* kalkis pistinin biraz gerisinde ve uzerinde havada basla */
+        float start[3];
+
+        start[0] = RUNWAY_POS[0][0];
+        start[1] = 120.0f;
+        start[2] = RUNWAY_POS[0][1] + 700.0f;
+        flight_init(&plane, start, 3.14159265f);
+    }
     proj = mat4_perspective(FOV_DEG * 3.14159265f / 180.0f,
                             rsx3d_aspect(), Z_NEAR, Z_FAR);
 
@@ -145,16 +179,43 @@ int main(int argc, const char *argv[])
         /* menuden secilen hava/saat her karede sahneye yansitilir */
         atmosphere_compute(&atm, menu.weather, menu.time);
     objectives_init(&objs);
+    {
+        /* kalkis pistinin biraz gerisinde ve uzerinde havada basla */
+        float start[3];
 
-        camera_update(&cam, forward, strafe, updown, yaw_in, pitch_in, DT);
-        hud_update(&hud, &cam, DT);
-        objectives_update(&objs, &cam, hud.speed_kmh);
+        start[0] = RUNWAY_POS[0][0];
+        start[1] = 120.0f;
+        start[2] = RUNWAY_POS[0][1] + 700.0f;
+        flight_init(&plane, start, 3.14159265f);
+    }
+
+        flight_update(&plane, DT);
+
+        if (cam_mode == CAM_FREE)
+            camera_update(&cam, forward, strafe, updown, yaw_in, pitch_in, DT);
+        else
+            flightcam_update(&cam, cam_mode, &plane, DT);
+
+        hud_update(&hud, &plane, DT);
+        objectives_update(&objs, &cam, flight_speed_kmh(&plane));
 
         time_sec = (float)(frames++) / 60.0f;
+
+        /* ilk karelerde nereye kadar gidildigi kayda gecer */
+        if (frames == 1)
+            ps3log("ilk kare basliyor");
+        else if (frames == 2)
+            ps3log("ilk kare tamamlandi (cizim ve flip calisiyor)");
+        else if (frames == 120)
+            ps3log("120 kare tamamlandi, sahne akiyor");
 
         rsx3d_begin_frame(SKY_CLEAR_COLOR);
         scene_draw(&cam, &proj, time_sec, &atm);
         runway_draw(&cam, &proj, &atm);
+
+        /* kokpit gorusunde kendi ucagimizi cizmiyoruz */
+        if (cam_mode != CAM_COCKPIT)
+            aircraft_draw(&plane, &cam, &proj, &atm);
 
         /* 2D bindirme: dikdortgenler toplanir, sahnenin ustune tek
          * cizim cagrisiyla gonderilir */
@@ -162,7 +223,8 @@ int main(int argc, const char *argv[])
         weatherfx_draw(&atm, time_sec);
         if (menu.hud_visible) {
             hud_draw(&hud, &cam);
-            gauges_draw(hud.speed_kmh, cam.pos[1], cam.pitch, 0.0f);
+            gauges_draw(flight_speed_kmh(&plane), flight_altitude(&plane),
+                        plane.pitch, plane.roll);
             objectives_draw(&objs);
             minimap_draw(&cam);
             waypoint_draw_all(&cam, &proj);
@@ -172,6 +234,9 @@ int main(int argc, const char *argv[])
 
         rsx3d_end_frame();
     }
+
+    ps3log("cikis: %lu kare cizildi", frames);
+    ps3log_close();
 
     sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);
     input_exit();
