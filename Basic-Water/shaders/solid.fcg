@@ -1,0 +1,20 @@
+/* Duz renkli 3D nesneler - fragment programi.
+ * Mesafeyle ufuk rengine karisir; boylece pistler sahnenin sisine uyar. */
+void main
+(
+	float4 color    : TEXCOORD0,
+	float4 worldPos : TEXCOORD1,
+
+	uniform float4 eyePosition,
+	uniform float4 horizonCol,
+	uniform float  fogDistance,
+
+	out float4 oColor
+)
+{
+	float dist = length(worldPos.xyz - eyePosition.xyz);
+	float fog = saturate(dist / fogDistance);
+	fog = fog * fog;
+
+	oColor = float4(lerp(color.rgb, horizonCol.xyz, fog), 1.0f);
+}

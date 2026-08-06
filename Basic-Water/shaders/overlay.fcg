@@ -1,0 +1,30 @@
+/* 2D bindirme - fragment programi.
+ *
+ * params.x  sekil modu: 0 dikdortgen, 1 yumusak leke, 2 halka/daire
+ * params.yz kose UV (0..1)
+ * params.w  halka ic yaricapi (0 ise dolu daire)
+ *
+ * Kosullu dallanma yerine karisim kullaniliyor; fragment biriminde
+ * dallanma pahali ve bazi durumlarda guvenilmez. */
+void main
+(
+	float4 color  : TEXCOORD0,
+	float4 params : TEXCOORD1,
+
+	out float4 oColor
+)
+{
+	float2 uv = params.yz;
+	float  d  = length(uv - 0.5f) * 2.0f;
+
+	float blob = 1.0f - smoothstep(0.15f, 1.0f, d);
+	float ring = smoothstep(params.w - 0.10f, params.w + 0.02f, d)
+	             * (1.0f - smoothstep(0.90f, 1.0f, d));
+
+	float m1 = saturate(params.x);
+	float m2 = saturate(params.x - 1.0f);
+
+	float a = color.a * lerp(lerp(1.0f, blob, m1), ring, m2);
+
+	oColor = float4(color.rgb, a);
+}

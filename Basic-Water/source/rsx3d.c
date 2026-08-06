@@ -261,3 +261,9 @@ gcmContextData *rsx3d_context(void)
 {
     return context;
 }
+
+/* GPU sahneyi bitirene kadar bekler; ardindan arka tampona CPU ile yazmak
+ * guvenlidir. Beklemeden yazilirsa RSX hala cizerken uzerine yazilir ve
+ * HUD titrer. */
+u32 rsx3d_width(void)  { return scr_w; }
+u32 rsx3d_height(void) { return scr_h; }

@@ -1,0 +1,20 @@
+/* Duz renkli 3D nesneler (pistler, platformlar) - vertex programi.
+ * Renk vertex ozniteliginde tasinir, boylece tek shader ile farkli
+ * renkteki parcalar tek cizimde gonderilebilir. */
+void main
+(
+	float3 vertexPosition : POSITION,
+	float3 vertexNormal   : NORMAL,     /* renk */
+	float2 vertexTexcoord : TEXCOORD0,  /* x: parlaklik carpani */
+
+	uniform float4x4 mvpMatrix,
+
+	out float4 ePosition : POSITION,
+	out float4 oColor    : TEXCOORD0,
+	out float4 oWorldPos : TEXCOORD1
+)
+{
+	ePosition = mul(mvpMatrix, float4(vertexPosition, 1.0f));
+	oColor    = float4(vertexNormal * vertexTexcoord.x, 1.0f);
+	oWorldPos = float4(vertexPosition, 1.0f);
+}

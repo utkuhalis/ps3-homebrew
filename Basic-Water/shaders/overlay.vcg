@@ -1,0 +1,22 @@
+/* 2D bindirme - vertex programi.
+ *
+ * Konumlar clip uzayinda gelir. Renk NORMAL ozniteliginde, saydamlik ve
+ * sekil bilgisi TEXCOORD0'da tasinir:
+ *   x = saydamlik, y = sekil (0 dikdortgen, 1 yumusak daire), zw = kose UV */
+void main
+(
+	float3 vertexPosition : POSITION,
+	float3 vertexNormal   : NORMAL,
+	float4 vertexTexcoord : TEXCOORD0,
+	float  vertexInner    : TEXCOORD1,
+
+	out float4 ePosition : POSITION,
+	out float4 oColor    : TEXCOORD0,
+	out float4 oParams   : TEXCOORD1
+)
+{
+	ePosition = float4(vertexPosition.xy, 0.0f, 1.0f);
+	oColor    = float4(vertexNormal, vertexTexcoord.x);
+	oParams   = float4(vertexTexcoord.y, vertexTexcoord.z, vertexTexcoord.w,
+	                   vertexInner);
+}

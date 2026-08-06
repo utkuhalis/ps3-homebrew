@@ -33,7 +33,13 @@ if [ "$1" = "test" ]; then
         mkdir -p build-test &&
         gcc -O1 -Wall -Wextra -o build-test/test_math tests/test_math.c \
             source/mat4.c source/camera.c -lm &&
-        ./build-test/test_math'
+        ./build-test/test_math &&
+        gcc -O1 -Wall -Wextra -o build-test/test_menu tests/test_menu.c \
+            tests/menu_stubs.c source/gamemenu.c -lm &&
+        ./build-test/test_menu &&
+        gcc -O1 -Wall -Wextra -o build-test/test_atm tests/test_atmosphere.c \
+            source/atmosphere.c -lm &&
+        ./build-test/test_atm'
     exit $?
 fi
 

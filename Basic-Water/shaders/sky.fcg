@@ -20,13 +20,12 @@ float cloud_pattern(float2 p)
 	return (a + b * 0.85f + c * 0.65f + d) * 0.17f + 0.5f;
 }
 
-float3 sky_color(float3 dir, float3 sunDir, float time)
+float3 sky_color(float3 dir, float3 sunDir, float time,
+                 float3 horizon, float3 zenith, float3 sunCol,
+                 float4 cloudP)
 {
 	float up = saturate(dir.y);
 	float grad = pow(up, 0.55f);
-
-	float3 horizon = float3(0.72f, 0.82f, 0.92f);
-	float3 zenith  = float3(0.16f, 0.38f, 0.78f);
 	float3 col = lerp(horizon, zenith, grad);
 
 	/* gunes: keskin disk + genis hale */
@@ -34,8 +33,8 @@ float3 sky_color(float3 dir, float3 sunDir, float time)
 	float disk = smoothstep(0.9987f, 0.9994f, sd);
 	float glow = pow(sd, 220.0f) * 0.55f + pow(sd, 12.0f) * 0.16f;
 
-	col += glow * float3(1.00f, 0.92f, 0.72f);
-	col = lerp(col, float3(1.00f, 0.98f, 0.90f), disk);
+	col += glow * sunCol;
+	col = lerp(col, sunCol * 1.15f, disk);
 
 	/* bulutlar: isinin bulut katmanini kestigi noktada katmanli gurultu */
 	/* Bulutlar: bakis isini bulut katmanini nerede kesiyorsa orada desen.
@@ -45,10 +44,11 @@ float3 sky_color(float3 dir, float3 sunDir, float time)
 	float2 cp = float2(dir.x * t + 9.0f * time,
 	                   dir.z * t + 3.0f * time) * 0.0016f;
 
-	float cover = smoothstep(0.50f, 0.78f, cloud_pattern(cp));
+	/* cloudP: x=esik alt, y=esik ust, z=parlaklik */
+	float cover = smoothstep(cloudP.x, cloudP.y, cloud_pattern(cp));
 	cover *= smoothstep(0.02f, 0.30f, dir.y);
 
-	float lit = 0.82f + 0.18f * pow(sd, 4.0f);
+	float lit = cloudP.z * (0.82f + 0.18f * pow(sd, 4.0f));
 	col = lerp(col, float3(1.00f, 0.99f, 0.97f) * lit, cover);
 
 	return saturate(col);
@@ -59,6 +59,10 @@ void main
 	float4 rayDir : TEXCOORD0,
 
 	uniform float4 sunDir,
+	uniform float4 sunColor,
+	uniform float4 horizonCol,
+	uniform float4 zenithCol,
+	uniform float4 cloudParams,
 	uniform float  timeSec,
 
 	out float4 oColor
@@ -66,5 +70,7 @@ void main
 {
 	float3 d = normalize(rayDir.xyz);
 
-	oColor = float4(sky_color(d, sunDir.xyz, timeSec), 1.0f);
+	oColor = float4(sky_color(d, sunDir.xyz, timeSec,
+	                          horizonCol.xyz, zenithCol.xyz, sunColor.xyz,
+	                          cloudParams), 1.0f);
 }

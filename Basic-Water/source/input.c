@@ -6,6 +6,13 @@
 #define ANALOG_DEAD 60      /* 128 merkezden sapma esigi */
 
 static padInfo padinfo;
+
+/* Pad baslatilirken ilk okumalarda gecersiz tus durumu gelebiliyor (gercek
+ * DualShock 3'te olctuk: ilk gecerli karede KARE tusu basili gorunuyordu).
+ * Veri seyrek geldigi icin bu deger uzun sure korunuyor ve kamera kilitlenmis
+ * gibi donuyordu. Bu yuzden ilk gecerli okumalar atlanir. */
+#define PAD_WARMUP_READS 4
+static int warmup[PP_MAX_PADS];
 static float axis_lx, axis_ly, axis_rx, axis_ry;
 static unsigned int cur_btn[PP_MAX_PADS];
 static unsigned int prev_btn[PP_MAX_PADS];
@@ -85,6 +92,7 @@ void input_update(void)
             /* kol cikarildi: tuslar birakilmis, cubuklar merkezde sayilir */
             connected[i] = 0;
             cur_btn[i] = 0;
+            warmup[i] = 0;              /* kol yeniden takilirsa tekrar isin */
             if (i == 0) {
                 axis_lx = axis_ly = 0.0f;
                 axis_rx = axis_ry = 0.0f;
@@ -100,6 +108,11 @@ void input_update(void)
          * okunur ve kamera kendi kendine surukleni r. Veri yoksa onceki
          * karenin durumu korunur. */
         if (ioPadGetData(i, &data) == 0 && data.len > 0) {
+            if (warmup[i] < PAD_WARMUP_READS) {
+                warmup[i]++;
+                continue;               /* baslatma verisi: yok say */
+            }
+
             cur_btn[i] = pack(&data);
 
             if (i == 0) {
@@ -189,18 +202,34 @@ float input_axis_left_y(void)
     return axis_or(axis_ly, d);
 }
 
+/* Bakis oncelikle sag analogdan gelir. Analog yoksa (emulatorde klavye)
+ * yuz tuslari yedek olarak kullanilabilir; ancak bu yedek yalnizca menu
+ * kapaliyken aciktir, aksi halde menu onay tusuyla cakisir. */
+static int look_keys_enabled = 1;
+
+void input_set_look_keys(int enabled)
+{
+    look_keys_enabled = enabled;
+}
+
 float input_axis_right_x(void)
 {
     float d = 0.0f;
-    if (input_held(0, PAD_SQUARE)) d = -1.0f;   /* sola bak */
-    if (input_held(0, PAD_CIRCLE)) d =  1.0f;   /* saga bak */
+
+    if (look_keys_enabled) {
+        if (input_held(0, PAD_SQUARE)) d = -1.0f;
+        if (input_held(0, PAD_CIRCLE)) d =  1.0f;
+    }
     return axis_or(axis_rx, d);
 }
 
 float input_axis_right_y(void)
 {
     float d = 0.0f;
-    if (input_held(0, PAD_TRIANGLE)) d = -1.0f; /* yukari bak */
-    if (input_held(0, PAD_CROSS))    d =  1.0f; /* asagi bak */
+
+    if (look_keys_enabled) {
+        if (input_held(0, PAD_TRIANGLE)) d = -1.0f;
+        if (input_held(0, PAD_CROSS))    d =  1.0f;
+    }
     return axis_or(axis_ry, d);
 }

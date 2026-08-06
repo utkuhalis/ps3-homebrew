@@ -35,6 +35,9 @@ int  input_dir(int pad);
  * Analog verisi gelmiyorsa (RPCS3 klavye modu) d-pad bunlari surer. */
 float input_axis_left_x(void);
 float input_axis_left_y(void);
+/* Menu acikken bakis tus yedegi kapatilir (onay tusuyla cakismasin) */
+void  input_set_look_keys(int enabled);
+
 float input_axis_right_x(void);
 float input_axis_right_y(void);
 

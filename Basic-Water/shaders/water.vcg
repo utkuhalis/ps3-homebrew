@@ -12,6 +12,8 @@ void main
 	uniform float4x4 mvpMatrix,
 	uniform float    timeSec,
 	uniform float2   worldOffset,
+	uniform float    waveScale,
+	uniform float    waveLength,
 
 	out float4 ePosition : POSITION,
 	out float4 oWorldPos : TEXCOORD0,
@@ -21,20 +23,29 @@ void main
 	float3 p = vertexPosition + vertexNormal * 0.0f
 	           + float3(vertexTexcoord, 0.0f) * 0.0f;
 
-	/* Geometride yalnizca buyuk iki dalga tasinir; kucuk dalgalar izgara
-	 * cozunurlugune sigmadigi icin fragment tarafinda normal olarak eklenir. */
-	float4 dirX  = float4( 1.00f,  0.62f, 0.0f, 0.0f);
-	float4 dirZ  = float4( 0.00f,  0.78f, 0.0f, 0.0f);
-	float4 len   = float4(140.0f, 74.0f,  1.0f, 1.0f);
-	float4 amp   = float4(  1.10f, 0.62f, 0.0f, 0.0f);
-	float4 speed = float4(  1.00f, 1.35f, 0.0f, 0.0f);
+	/* Geometride uc buyuk dalga tasinir; kucuk dalgalar izgara
+	 * cozunurlugune sigmadigi icin fragment tarafinda normal olarak eklenir.
+	 * Yonler bilerek birbirine paralel degil ve dalga boylari birbirinin
+	 * tam kati degil; aksi halde desen tekrar edip "kat kat" gorunuyor. */
+	float4 dirX  = float4( 0.98f, -0.42f,  0.55f, 0.0f);
+	float4 dirZ  = float4( 0.17f,  0.91f, -0.83f, 0.0f);
+	float4 len   = float4(163.0f, 89.0f,  47.0f,  1.0f) * waveLength;
+	float4 amp   = float4(  1.05f, 0.58f,  0.27f, 0.0f) * waveScale;
+	float4 speed = float4(  0.85f, 1.21f,  1.63f, 0.0f);
 
 	float4 k = 6.28318531f / len;
 	/* Dalga fazi DUNYA koordinatindan hesaplanir. Duzlem kamerayla birlikte
 	 * kaydigi icin yerel koordinat kullanilirsa desen de kamerayla birlikte
 	 * suruklenir ve deniz sabit durmaz. */
 	float2 wp = float2(p.x + worldOffset.x, p.z + worldOffset.y);
-	float4 phase = (wp.x * dirX + wp.y * dirZ) * k + timeSec * speed * k * 12.0f;
+
+	/* Dalganin icine dalga: fazi konuma bagli olarak kaydirmak duzenli
+	 * sinus desenini kirar ve deniz dogal gorunur. */
+	float warp = sin(wp.x * 0.0071f + timeSec * 0.31f) * 1.7f
+	           + sin(wp.y * 0.0053f - timeSec * 0.23f) * 1.4f;
+
+	float4 phase = (wp.x * dirX + wp.y * dirZ) * k
+	             + timeSec * speed * k * 12.0f + warp;
 
 	float4 s = sin(phase);
 	float4 c = cos(phase) * amp * k;

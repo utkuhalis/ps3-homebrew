@@ -4,7 +4,8 @@
 
 void camera_init(Camera *c)
 {
-    vec3_set(c->pos, 0.0f, 20.0f, 0.0f);
+    /* kalkis pistinin biraz uzerinde ve gerisinde basla */
+    vec3_set(c->pos, -1500.0f, 60.0f, 1600.0f);
     c->yaw = 0.0f;
     c->pitch = 0.0f;
 }

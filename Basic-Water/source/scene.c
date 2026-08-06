@@ -9,6 +9,7 @@
 #include "scene.h"
 #include "rsx3d.h"
 #include "skycolor.h"
+#include "atmosphere.h"
 
 /* Derleme sirasinda gomulen Cg programlari */
 #include "sky_vpo.h"
@@ -59,8 +60,11 @@ static u32   sky_fp_off = 0;
 /* su programi sabitleri */
 static rsxProgramConst *w_mvp, *w_time_v, *w_woff;
 static rsxProgramConst *w_eye, *w_sun, *w_time_f, *w_fog;
+static rsxProgramConst *w_suncol, *w_hor, *w_zen, *w_cloud, *w_water;
+static rsxProgramConst *w_wave, *w_wavelen;
 /* gokyuzu programi sabitleri */
 static rsxProgramConst *s_sun, *s_time;
+static rsxProgramConst *s_suncol, *s_hor, *s_zen, *s_cloud;
 static rsxProgramConst *s_fwd, *s_right, *s_up, *s_tan;
 
 static int build_sea(void)
@@ -137,6 +141,8 @@ static int load_programs(void)
     w_mvp    = rsxVertexProgramGetConst(water_vp, "mvpMatrix");
     w_time_v = rsxVertexProgramGetConst(water_vp, "timeSec");
     w_woff   = rsxVertexProgramGetConst(water_vp, "worldOffset");
+    w_wave   = rsxVertexProgramGetConst(water_vp, "waveScale");
+    w_wavelen = rsxVertexProgramGetConst(water_vp, "waveLength");
 
     rsxFragmentProgramGetUCode(water_fp, &water_fp_ucode, &sz);
     water_fp_buf = (u32 *)rsxMemalign(64, sz);
@@ -150,6 +156,11 @@ static int load_programs(void)
     w_sun    = rsxFragmentProgramGetConst(water_fp, "sunDir");
     w_time_f = rsxFragmentProgramGetConst(water_fp, "timeSec");
     w_fog    = rsxFragmentProgramGetConst(water_fp, "fogDistance");
+    w_suncol = rsxFragmentProgramGetConst(water_fp, "sunColor");
+    w_hor    = rsxFragmentProgramGetConst(water_fp, "horizonCol");
+    w_zen    = rsxFragmentProgramGetConst(water_fp, "zenithCol");
+    w_cloud  = rsxFragmentProgramGetConst(water_fp, "cloudParams");
+    w_water  = rsxFragmentProgramGetConst(water_fp, "waterParams");
 
     /* --- gokyuzu --- */
     rsxVertexProgramGetUCode(sky_vp, &sky_vp_ucode, &sz);
@@ -164,6 +175,10 @@ static int load_programs(void)
 
     s_sun  = rsxFragmentProgramGetConst(sky_fp, "sunDir");
     s_time = rsxFragmentProgramGetConst(sky_fp, "timeSec");
+    s_suncol = rsxFragmentProgramGetConst(sky_fp, "sunColor");
+    s_hor    = rsxFragmentProgramGetConst(sky_fp, "horizonCol");
+    s_zen    = rsxFragmentProgramGetConst(sky_fp, "zenithCol");
+    s_cloud  = rsxFragmentProgramGetConst(sky_fp, "cloudParams");
 
     s_fwd   = rsxVertexProgramGetConst(sky_vp, "camFwd");
     s_right = rsxVertexProgramGetConst(sky_vp, "camRight");
@@ -224,13 +239,14 @@ static void disable_user_clip(void)
 
 /* Gokyuzu: ekrani kaplayan dortgen. Kose bakis yonleri kameradan turetilir
  * ve "normal" ozniteliginde tasinir. */
-static void draw_sky(const Camera *cam, float time)
+static void draw_sky(const Camera *cam, float time, const Atmosphere *atm)
 {
     gcmContextData *ctx = rsx3d_context();
     float fwd[3], right[3], up[3];
     float tan_half = tanf(60.0f * 3.14159265f / 180.0f * 0.5f);
     float aspect = rsx3d_aspect();
     float sun[4], tan_xy[4], f4[4], r4[4], u4[4];
+    float suncol[4], hor[4], zen[4], cloud[4];
     u32 off;
     int i, k;
 
@@ -248,10 +264,18 @@ static void draw_sky(const Camera *cam, float time)
         f4[k] = fwd[k];
         r4[k] = right[k];
         u4[k] = up[k];
-        sun[k] = SUN_DIR[k];
+        sun[k] = atm->sun_dir[k];
+        suncol[k] = atm->sun_color[k];
+        hor[k] = atm->horizon[k];
+        zen[k] = atm->zenith[k];
     }
     f4[3] = r4[3] = u4[3] = 0.0f;
-    sun[3] = 0.0f;
+    sun[3] = suncol[3] = hor[3] = zen[3] = 0.0f;
+
+    cloud[0] = atm->cloud_low;
+    cloud[1] = atm->cloud_high;
+    cloud[2] = atm->cloud_bright;
+    cloud[3] = 0.0f;
     (void)i;
 
     /* Gokyuzu her seyin arkasindadir: derinlik testi ve yazimi kapatilir.
@@ -268,8 +292,12 @@ static void draw_sky(const Camera *cam, float time)
     if (s_up)    rsxSetVertexProgramParameter(ctx, sky_vp, s_up,    u4);
     if (s_tan)   rsxSetVertexProgramParameter(ctx, sky_vp, s_tan,   tan_xy);
 
-    if (s_sun)  rsxSetFragmentProgramParameter(ctx, sky_fp, s_sun,  sun,   sky_fp_off, GCM_LOCATION_RSX);
-    if (s_time) rsxSetFragmentProgramParameter(ctx, sky_fp, s_time, &time, sky_fp_off, GCM_LOCATION_RSX);
+    if (s_sun)    rsxSetFragmentProgramParameter(ctx, sky_fp, s_sun,    sun,    sky_fp_off, GCM_LOCATION_RSX);
+    if (s_suncol) rsxSetFragmentProgramParameter(ctx, sky_fp, s_suncol, suncol, sky_fp_off, GCM_LOCATION_RSX);
+    if (s_hor)    rsxSetFragmentProgramParameter(ctx, sky_fp, s_hor,    hor,    sky_fp_off, GCM_LOCATION_RSX);
+    if (s_zen)    rsxSetFragmentProgramParameter(ctx, sky_fp, s_zen,    zen,    sky_fp_off, GCM_LOCATION_RSX);
+    if (s_cloud)  rsxSetFragmentProgramParameter(ctx, sky_fp, s_cloud,  cloud,  sky_fp_off, GCM_LOCATION_RSX);
+    if (s_time)   rsxSetFragmentProgramParameter(ctx, sky_fp, s_time,   &time,  sky_fp_off, GCM_LOCATION_RSX);
 
     rsxLoadFragmentProgramLocation(ctx, sky_fp, sky_fp_off, GCM_LOCATION_RSX);
     disable_user_clip();
@@ -283,13 +311,15 @@ static void draw_sky(const Camera *cam, float time)
     rsxSetDepthWriteEnable(ctx, 1);
 }
 
-static void draw_water(const Camera *cam, const Mat4 *proj, float time)
+static void draw_water(const Camera *cam, const Mat4 *proj, float time,
+                       const Atmosphere *atm)
 {
     gcmContextData *ctx = rsx3d_context();
     Mat4 view = camera_view_matrix(cam);
     Mat4 model, mv, mvp;
-    float eye[4], sun[4];
-    float fog = FOG_DISTANCE;
+    float eye[4], sun[4], suncol[4], hor[4], zen[4], cloud[4], water[4];
+    float fog, wave, wavelen;
+    int k;
     u32 off;
 
     /* Duzlem kamerayla birlikte kayar; kaydirma izgara adiminin katlarina
@@ -301,14 +331,34 @@ static void draw_water(const Camera *cam, const Mat4 *proj, float time)
     mv    = mat4_mul(&view, &model);
     mvp   = mat4_mul(proj, &mv);
 
-    eye[0] = cam->pos[0]; eye[1] = cam->pos[1]; eye[2] = cam->pos[2]; eye[3] = 0.0f;
-    sun[0] = SUN_DIR[0];  sun[1] = SUN_DIR[1];  sun[2] = SUN_DIR[2];  sun[3] = 0.0f;
+    for (k = 0; k < 3; k++) {
+        eye[k] = cam->pos[k];
+        sun[k] = atm->sun_dir[k];
+        suncol[k] = atm->sun_color[k];
+        hor[k] = atm->horizon[k];
+        zen[k] = atm->zenith[k];
+    }
+    eye[3] = sun[3] = suncol[3] = hor[3] = zen[3] = 0.0f;
+
+    cloud[0] = atm->cloud_low;
+    cloud[1] = atm->cloud_high;
+    cloud[2] = atm->cloud_bright;
+    cloud[3] = 0.0f;
+
+    water[0] = atm->water_dark;
+    water[1] = water[2] = water[3] = 0.0f;
+
+    fog = atm->fog_distance;
+    wave = atm->wave_scale;
+    wavelen = atm->wave_length;
 
     bind_attribs(sea_verts);
 
     rsxLoadVertexProgram(ctx, water_vp, water_vp_ucode);
     if (w_mvp)    rsxSetVertexProgramParameter(ctx, water_vp, w_mvp, mvp.m);
     if (w_time_v) rsxSetVertexProgramParameter(ctx, water_vp, w_time_v, &time);
+    if (w_wave)    rsxSetVertexProgramParameter(ctx, water_vp, w_wave, &wave);
+    if (w_wavelen) rsxSetVertexProgramParameter(ctx, water_vp, w_wavelen, &wavelen);
     if (w_woff) {
         float woff[2];
         woff[0] = sx;
@@ -319,7 +369,12 @@ static void draw_water(const Camera *cam, const Mat4 *proj, float time)
     if (w_eye)    rsxSetFragmentProgramParameter(ctx, water_fp, w_eye,    eye,   water_fp_off, GCM_LOCATION_RSX);
     if (w_sun)    rsxSetFragmentProgramParameter(ctx, water_fp, w_sun,    sun,   water_fp_off, GCM_LOCATION_RSX);
     if (w_time_f) rsxSetFragmentProgramParameter(ctx, water_fp, w_time_f, &time, water_fp_off, GCM_LOCATION_RSX);
-    if (w_fog)    rsxSetFragmentProgramParameter(ctx, water_fp, w_fog,    &fog,  water_fp_off, GCM_LOCATION_RSX);
+    if (w_fog)    rsxSetFragmentProgramParameter(ctx, water_fp, w_fog,    &fog,   water_fp_off, GCM_LOCATION_RSX);
+    if (w_suncol) rsxSetFragmentProgramParameter(ctx, water_fp, w_suncol, suncol, water_fp_off, GCM_LOCATION_RSX);
+    if (w_hor)    rsxSetFragmentProgramParameter(ctx, water_fp, w_hor,    hor,    water_fp_off, GCM_LOCATION_RSX);
+    if (w_zen)    rsxSetFragmentProgramParameter(ctx, water_fp, w_zen,    zen,    water_fp_off, GCM_LOCATION_RSX);
+    if (w_cloud)  rsxSetFragmentProgramParameter(ctx, water_fp, w_cloud,  cloud,  water_fp_off, GCM_LOCATION_RSX);
+    if (w_water)  rsxSetFragmentProgramParameter(ctx, water_fp, w_water,  water,  water_fp_off, GCM_LOCATION_RSX);
 
     rsxLoadFragmentProgramLocation(ctx, water_fp, water_fp_off, GCM_LOCATION_RSX);
     disable_user_clip();
@@ -329,8 +384,9 @@ static void draw_water(const Camera *cam, const Mat4 *proj, float time)
                       GCM_INDEX_TYPE_16B, GCM_LOCATION_RSX);
 }
 
-void scene_draw(const Camera *cam, const Mat4 *proj, float time)
+void scene_draw(const Camera *cam, const Mat4 *proj, float time,
+                const Atmosphere *atm)
 {
-    draw_sky(cam, time);
-    draw_water(cam, proj, time);
+    draw_sky(cam, time, atm);
+    draw_water(cam, proj, time, atm);
 }
