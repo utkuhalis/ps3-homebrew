@@ -13,6 +13,7 @@ include $(PSL1GHT)/ppu_rules
 TARGET		:=	basicwater
 BUILD		:=	build
 SOURCES		:=	source
+DATA		:=	data
 INCLUDES	:=	source
 SHADERS		:=	shaders
 
@@ -25,7 +26,7 @@ CFLAGS		=	-O2 -Wall -Wextra -mcpu=cell $(MACHDEP) $(INCLUDE)
 CXXFLAGS	=	$(CFLAGS)
 LDFLAGS		=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 
-LIBS		:=	-lrsx -lgcm_sys -lio -lsysutil -lrt -llv2 -lm
+LIBS		:=	-lrsx -lgcm_sys -lio -lsysutil -laudio -lrt -llv2 -lm
 
 LIBDIRS		:=
 

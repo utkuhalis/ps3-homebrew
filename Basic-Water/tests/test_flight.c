@@ -163,8 +163,169 @@ static void test_yonelim_sinirli(void)
     CHECK(f.yaw >= -3.15f && f.yaw <= 3.15f, "sapma acisi sarmali");
 }
 
+static void test_pistte_basliyor(void)
+{
+    Flight f;
+    float rw[2] = { -1500.0f, 1200.0f };
+
+    printf("test: ucak pistte, duruyor ve motor rolantide basliyor\n");
+    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+
+    CHECK(f.on_ground, "yerde");
+    CHECK(f.airspeed < 0.1f, "duruyor");
+    CHECK(f.throttle < 0.01f, "motor rolantide");
+    CHECK(f.gear_down, "inis takimi acik");
+    CHECK(f.pos[1] > DECK_Y, "pist yuzeyinin uzerinde");
+}
+
+static void test_gaz_vermeden_kalkamaz(void)
+{
+    Flight f;
+    float rw[2] = { 0.0f, 0.0f };
+    int i;
+
+    printf("test: gaz verilmeden ucak pistte kaliyor\n");
+    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+    f.in_pitch = 1.0f;              /* burnu kaldirmayi dene */
+
+    for (i = 0; i < 600; i++)
+        flight_update(&f, 1.0f / 60.0f);
+
+    CHECK(f.on_ground, "hala yerde");
+    CHECK(!f.airborne, "havalanmadi");
+}
+
+static void test_kalkis_yapilabiliyor(void)
+{
+    Flight f;
+    float rw[2] = { 0.0f, 0.0f };
+    int i;
+    float max_speed = 0.0f;
+
+    printf("test: tam gazla hizlanip burun kaldirilinca kalkis oluyor\n");
+    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+    f.throttle = 1.0f;
+
+    /* Once hizlan (burun yerde), sonra burnu kaldir.
+     * 30 saniye: gercekci itkiyle kalkis kosusu ~14 saniye suruyor,
+     * tirmanis icin de zaman gerekiyor. Test onceden 15 saniyeydi ve
+     * itki yariya indirildiginde yetmez oldu. */
+    for (i = 0; i < 1800; i++) {
+        flight_update(&f, 1.0f / 60.0f);
+        if (f.airspeed > max_speed)
+            max_speed = f.airspeed;
+        /* rotate hizina ulasinca burnu kaldir */
+        if (f.airspeed > ROTATE_SPEED_MS)
+            f.in_pitch = 0.55f;
+    }
+
+    CHECK(max_speed > ROTATE_SPEED_MS, "kalkis hizina ulasildi");
+    CHECK(f.airborne, "ucak havalandi");
+    CHECK(f.pos[1] > DECK_Y + 10.0f, "yukselmeye devam etti");
+}
+
+static void test_gear_surukleme(void)
+{
+    float acik, kapali;
+
+    printf("test: acik inis takimi suruklemeyi artiriyor\n");
+    acik   = flight_drag_force_full(90.0f, 0.08f, 0.0f, 0.0f, 1);
+    kapali = flight_drag_force_full(90.0f, 0.08f, 0.0f, 0.0f, 0);
+
+    CHECK(acik > kapali, "takim acikken surukleme daha yuksek");
+}
+
+/* Duz ucusta ve donuste STALL uyarisi CIKMAMALI.
+ *
+ * Hucum acisi once hiz vektoru ile burun arasindaki toplam aci olarak
+ * hesaplaniyordu; yan kayma da bu aciya karistigi icin her donuste sahte
+ * stall uyarisi veriliyordu. */
+static void test_donuste_sahte_stall_yok(void)
+{
+    Flight f;
+    float pos[3];
+    int i;
+    int stall_frames = 0;
+    float max_aoa = 0.0f;
+
+    printf("test: duz ucus ve donuste sahte stall cikmiyor\n");
+
+    pos[0] = 0.0f; pos[1] = 800.0f; pos[2] = 0.0f;
+    flight_init(&f, pos, 0.0f);
+    f.throttle = 0.75f;
+
+    /* once duz ucusta dengelensin */
+    for (i = 0; i < 60 * 10; i++)
+        flight_update(&f, 1.0f / 60.0f);
+
+    /* Sonra 30 saniye koordineli donus: yatis 26 derecede TUTULUR.
+     * Sabit aileron girdisi vermek ucagi takla attirir - gercek ucakta da
+     * oyle olur, o yuzden pilot gibi yatisi sabit tutuyoruz. */
+    for (i = 0; i < 60 * 30; i++) {
+        float bank_target = 0.45f;
+
+        f.in_roll  = (bank_target - f.roll) * 3.0f - f.r_rate * 1.5f;
+        if (f.in_roll >  1.0f) f.in_roll =  1.0f;
+        if (f.in_roll < -1.0f) f.in_roll = -1.0f;
+
+        /* Irtifa tutulur. Sabit burun-yukari komutu vermek ucagi surekli
+         * tirmandirip hiz kaybettiriyor ve sonunda dikleştiriyordu - gercek
+         * pilot da irtifayi tutar, komutu sabit birakmaz. */
+        {
+            float alt_err = 800.0f - f.pos[1];
+            float vs = f.vel[1];
+
+            f.in_pitch = alt_err * 0.006f - vs * 0.13f - f.p_rate * 1.4f;
+            if (f.in_pitch >  1.0f) f.in_pitch =  1.0f;
+            if (f.in_pitch < -1.0f) f.in_pitch = -1.0f;
+        }
+        flight_update(&f, 1.0f / 60.0f);
+
+        if (f.stalled)
+            stall_frames++;
+        if (f.aoa > max_aoa)
+            max_aoa = f.aoa;
+    }
+
+    printf("       donusteki en yuksek hucum acisi %.3f rad, stall %d kare\n",
+           max_aoa, stall_frames);
+    CHECK(stall_frames == 0, "koordineli donuste stall uyarisi cikmiyor");
+    CHECK(f.airspeed > 40.0f, "donuste ucak hizini koruyor");
+    CHECK(f.pos[1] > 300.0f, "donuste ucak dusmuyor");
+}
+
+/* Gercek stall hala calismali: burun asiri kaldirilirsa uyari cikmali */
+static void test_gercek_stall_calisiyor(void)
+{
+    Flight f;
+    float pos[3];
+    int i;
+    int stalled_once = 0;
+
+    printf("test: burun asiri kaldirilinca gercek stall oluyor\n");
+
+    pos[0] = 0.0f; pos[1] = 900.0f; pos[2] = 0.0f;
+    flight_init(&f, pos, 0.0f);
+    f.throttle = 0.0f;              /* gaz kesik: hiz duser */
+
+    for (i = 0; i < 60 * 40; i++) {
+        f.in_pitch = 1.0f;          /* burnu sonuna kadar cek */
+        flight_update(&f, 1.0f / 60.0f);
+        if (f.stalled)
+            stalled_once = 1;
+    }
+
+    CHECK(stalled_once, "asiri hucum acisinda stall algilaniyor");
+}
+
 int main(void)
 {
+    test_pistte_basliyor();
+    test_gaz_vermeden_kalkamaz();
+    test_kalkis_yapilabiliyor();
+    test_gear_surukleme();
+    test_donuste_sahte_stall_yok();
+    test_gercek_stall_calisiyor();
     test_tasima_hizla_artiyor();
     test_stall();
     test_flap_kritik_aciyi_artiriyor();

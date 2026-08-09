@@ -12,6 +12,7 @@
 #include "input.h"
 #include "overlay.h"
 #include "hud.h"
+#include "font.h"
 #include "gamemenu.h"
 #include "atmosphere.h"
 #include "weatherfx.h"
@@ -24,6 +25,8 @@
 #include "aircraft.h"
 #include "flightcam.h"
 #include "ps3log.h"
+#include "audio.h"
+#include "autopilot.h"
 
 SYS_PROCESS_PARAM(1001, 0x100000)
 
@@ -55,6 +58,7 @@ int main(int argc, const char *argv[])
     Objectives objs;
     Flight plane;
     CamMode cam_mode = CAM_CHASE;
+    Autopilot ap;
 
     (void)argc;
     (void)argv;
@@ -80,7 +84,8 @@ int main(int argc, const char *argv[])
     }
 
     rc = aircraft_init();
-    ps3log("aircraft_init -> %d", rc);
+    ps3log("aircraft_init -> %d (%u ucgen)", rc,
+           aircraft_triangle_count());
     if (rc < 0) {
         printf("HATA: aircraft_init basarisiz (%d)\n", rc);
         rsx3d_exit();
@@ -103,6 +108,10 @@ int main(int argc, const char *argv[])
         return 1;
     }
 
+    rc = audio_init();
+    ps3log("audio_init -> %d", rc);
+    /* Ses acilamazsa oyun sessiz devam eder; oyunu durdurmaya degmez. */
+
     ps3log("tum baslatmalar tamam, ana donguye giriliyor");
 
     if (input_init() != 0) {
@@ -116,17 +125,12 @@ int main(int argc, const char *argv[])
     camera_init(&cam);
     hud_init(&hud);
     gamemenu_init(&menu);
+    autopilot_init(&ap);
     atmosphere_compute(&atm, menu.weather, menu.time);
     objectives_init(&objs);
-    {
-        /* kalkis pistinin biraz gerisinde ve uzerinde havada basla */
-        float start[3];
-
-        start[0] = RUNWAY_POS[0][0];
-        start[1] = 120.0f;
-        start[2] = RUNWAY_POS[0][1] + 700.0f;
-        flight_init(&plane, start, 3.14159265f);
-    }
+    /* Pistte, motor rolantide basla: kalkisi oyuncu yapar. */
+    flight_init_on_runway(&plane, RUNWAY_POS[0], 0.55f,
+                          RUNWAY_LENGTH * 0.42f);
     proj = mat4_perspective(FOV_DEG * 3.14159265f / 180.0f,
                             rsx3d_aspect(), Z_NEAR, Z_FAR);
 
@@ -139,7 +143,9 @@ int main(int argc, const char *argv[])
         if (input_pressed(0, PAD_SELECT))
             gamemenu_toggle(&menu);
 
-        input_set_look_keys(!menu.open);
+        /* Yuz tuslarinin bakis yedegi yalnizca serbest kamerada aciktir;
+         * ucus modunda ayni tuslar flap/spoiler/takim/kamera icin kullanilir. */
+        input_set_look_keys(!menu.open && cam_mode == CAM_FREE);
 
         if (menu.open) {
             /* Menu acikken kamera dondurulur; girdi menuye gider. */
@@ -176,18 +182,68 @@ int main(int argc, const char *argv[])
             yaw_in = pitch_in = 0.0f;
         }
 
+        /* --- ucus kumandalari (menu kapaliyken) --- */
+        if (!menu.open) {
+            float stick_p = -input_axis_left_y();
+            float stick_r =  input_axis_left_x();
+
+            /* R3: otopilot ac/kapa. Kumandaya dokunmak da otopilotu birakir -
+             * gercek ucakta oldugu gibi pilot her an devralabilir. */
+            if (input_pressed(0, PAD_R3))
+                autopilot_toggle(&ap, &plane);
+
+            if (ap.engaged &&
+                (stick_p > 0.25f || stick_p < -0.25f ||
+                 stick_r > 0.25f || stick_r < -0.25f))
+                autopilot_disengage(&ap);
+
+            plane.in_pitch = stick_p;
+            plane.in_roll  = stick_r;
+            plane.in_yaw   = 0.0f;
+
+            /* Gaz: hem tetikler hem omuz tuslari. Emulatorun klavye
+             * eslemesinde L2/R2 her zaman rahat erisilebilir olmadigi icin
+             * L1/R1 de ayni isi yapar. */
+            if (input_held(0, PAD_R2) || input_held(0, PAD_R1))
+                plane.throttle += 0.6f * DT;
+            if (input_held(0, PAD_L2) || input_held(0, PAD_L1))
+                plane.throttle -= 0.6f * DT;
+            if (plane.throttle < 0.0f) plane.throttle = 0.0f;
+            if (plane.throttle > 1.0f) plane.throttle = 1.0f;
+
+            /* KARE: flap kademesi (0 -> 1/3 -> 2/3 -> tam -> 0) */
+            if (input_pressed(0, PAD_SQUARE)) {
+                plane.flap += 0.34f;
+                if (plane.flap > 1.01f)
+                    plane.flap = 0.0f;
+            }
+
+            /* UCGEN: basili tutuldugu surece spoiler ve fren */
+            if (input_held(0, PAD_TRIANGLE)) {
+                plane.spoiler = 1.0f;
+                plane.brakes = 1;
+            } else {
+                plane.spoiler = 0.0f;
+                plane.brakes = 0;
+            }
+
+            /* CARPI: inis takimi ac/kapa */
+            if (input_pressed(0, PAD_CROSS))
+                plane.gear_down = !plane.gear_down;
+
+            /* YUVARLAK: kamera modu (takip / kokpit / serbest) */
+            if (input_pressed(0, PAD_CIRCLE))
+                cam_mode = (CamMode)((cam_mode + 1) % CAM_MODE_COUNT);
+        } else {
+            plane.in_pitch = plane.in_roll = plane.in_yaw = 0.0f;
+        }
+
         /* menuden secilen hava/saat her karede sahneye yansitilir */
         atmosphere_compute(&atm, menu.weather, menu.time);
-    objectives_init(&objs);
-    {
-        /* kalkis pistinin biraz gerisinde ve uzerinde havada basla */
-        float start[3];
 
-        start[0] = RUNWAY_POS[0][0];
-        start[1] = 120.0f;
-        start[2] = RUNWAY_POS[0][1] + 700.0f;
-        flight_init(&plane, start, 3.14159265f);
-    }
+        /* Otopilot kumanda girdilerini oyuncunun yerine uretir; fizik
+         * degismez, ucak ayni modele tabidir. */
+        autopilot_update(&ap, &plane, DT);
 
         flight_update(&plane, DT);
 
@@ -197,6 +253,7 @@ int main(int argc, const char *argv[])
             flightcam_update(&cam, cam_mode, &plane, DT);
 
         hud_update(&hud, &plane, DT);
+        audio_update(&plane, &atm);
         objectives_update(&objs, &cam, flight_speed_kmh(&plane));
 
         time_sec = (float)(frames++) / 60.0f;
@@ -223,6 +280,12 @@ int main(int argc, const char *argv[])
         weatherfx_draw(&atm, time_sec);
         if (menu.hud_visible) {
             hud_draw(&hud, &cam);
+            hud_draw_controls(&plane);
+            hud_draw_throttle_lever(&plane, &ap);
+            hud_draw_warnings(&plane, frames);
+            hud_draw_help(&plane);
+            font_draw_text(24, 470, 1, flightcam_name(cam_mode),
+                           RGB(170, 200, 235));
             gauges_draw(flight_speed_kmh(&plane), flight_altitude(&plane),
                         plane.pitch, plane.roll);
             objectives_draw(&objs);
@@ -235,6 +298,7 @@ int main(int argc, const char *argv[])
         rsx3d_end_frame();
     }
 
+    audio_exit();
     ps3log("cikis: %lu kare cizildi", frames);
     ps3log_close();
 

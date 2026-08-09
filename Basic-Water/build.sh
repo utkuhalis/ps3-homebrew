@@ -46,8 +46,41 @@ if [ "$1" = "test" ]; then
         ./build-test/test_atm &&
         gcc -O1 -Wall -Wextra -o build-test/test_flight tests/test_flight.c \
             source/flight.c -lm &&
-        ./build-test/test_flight'
-    exit $?
+        ./build-test/test_flight &&
+        gcc -O1 -Wall -Wextra -o build-test/test_camview tests/test_camview.c \
+            source/flightcam.c source/camera.c source/mat4.c source/flight.c \
+            source/gauges.c -lm &&
+        ./build-test/test_camview &&
+        gcc -O1 -Wall -Wextra -o build-test/test_mesh tests/test_mesh.c \
+            source/mesh.c &&
+        ./build-test/test_mesh &&
+        gcc -O1 -Wall -Wextra -o build-test/test_autopilot \
+            tests/test_autopilot.c source/autopilot.c source/flight.c -lm &&
+        ./build-test/test_autopilot'
+    rc=$?
+    [ $rc -ne 0 ] && exit $rc
+
+    # Kaynak kontrolu: ucus durumu ana dongunun ICINDE sifirlanmamali.
+    # Bir kez bu hata olustu (init cagrisi dongunun icine kaydi) ve ucak her
+    # karede pistte sifirlandigi icin hicbir kumanda ise yaramadi.
+    echo ">>> Kaynak kontrolu: ana dongude durum sifirlama var mi"
+    if awk '/^    while \(!should_exit\)/{inloop=1} inloop && /flight_init/{print NR": "$0; found=1} END{exit !found}' \
+           source/main.c; then
+        echo "HATA: flight_init* ana dongunun icinde cagriliyor"
+        exit 1
+    fi
+    echo "  temiz"
+
+    # Kumandalarin main.c'de gercekten bagli oldugunu dogrula
+    echo ">>> Kaynak kontrolu: ucus kumandalari bagli mi"
+    for sym in in_pitch in_roll throttle flap spoiler gear_down cam_mode; do
+        grep -q "plane\.$sym\|cam_mode =" source/main.c || {
+            echo "HATA: $sym main.c'de kumandaya bagli degil"
+            exit 1
+        }
+    done
+    echo "  temiz"
+    exit 0
 fi
 
 # --- PS3'e gonderme ---
@@ -107,6 +140,19 @@ if [ "$1" = "clean" ]; then
     $PS3_RUN sh -c 'export PS3DEV=/usr/local/ps3dev PSL1GHT=/usr/local/ps3dev; make clean'
     rm -rf build-test
     exit 0
+fi
+
+# 0) Ucak modeli: glTF -> gomulebilir ikili. Kaynak model daha yeniyse
+#    yeniden uretilir. Saf Python, ek bagimlilik yok.
+MODEL_SRC=assets/model/plane_split.glb
+[ -f "$MODEL_SRC" ] || MODEL_SRC=assets/model/plane.glb
+if [ -f "$MODEL_SRC" ]; then
+    if [ ! -f data/plane.bin ] || [ "$MODEL_SRC" -nt data/plane.bin ]; then
+        echo ">>> Ucak modeli donusturuluyor"
+        mkdir -p data
+        $PS3_RUN python3 tools/glb_to_mesh.py "$MODEL_SRC" data/plane.bin \
+            --scale 0.62 --flip
+    fi
 fi
 
 # 1) Cg shader'lari -> RSX mikrokodu (.vpo/.fpo). Ciktilar mimariden bagimsizdir.

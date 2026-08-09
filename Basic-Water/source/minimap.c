@@ -59,7 +59,7 @@ void minimap_draw(const Camera *cam)
     overlay_fill_rect(MAP_X, MAP_Y, 1, MAP_H, COL_EDGE);
     overlay_fill_rect(MAP_X + MAP_W - 1, MAP_Y, 1, MAP_H, COL_EDGE);
 
-    font_draw_text(MAP_X + 8, MAP_Y + 7, 1, "KALKIŞ - VARIŞ", COL_TEXT);
+    font_draw_text(MAP_X + 8, MAP_Y + 7, 1, "DEPARTURE - ARRIVAL", COL_TEXT);
 
     world_to_map(START_POS[0], START_POS[1], &sx, &sy);
     world_to_map(END_POS[0], END_POS[1], &ex, &ey);
@@ -91,6 +91,6 @@ void minimap_draw(const Camera *cam)
     /* kalan mesafe */
     dx = END_POS[0] - cam->pos[0];
     dy = END_POS[1] - cam->pos[2];
-    snprintf(buf, sizeof(buf), "%d birim", (int)sqrtf(dx * dx + dy * dy));
+    snprintf(buf, sizeof(buf), "%d units", (int)sqrtf(dx * dx + dy * dy));
     font_draw_text(MAP_X + MAP_W - 92, MAP_Y + 7, 1, buf, COL_ROUTE);
 }

@@ -20,7 +20,7 @@ const float RUNWAY_POS[RUNWAY_COUNT][2] = {
 
 static const float RUNWAY_ANGLE[RUNWAY_COUNT] = { 0.55f, -0.85f };
 
-static const char *NAMES[RUNWAY_COUNT] = { "KALKIŞ", "İNİŞ" };
+static const char *NAMES[RUNWAY_COUNT] = { "DEPARTURE", "ARRIVAL" };
 
 const char *runway_name(int index)
 {

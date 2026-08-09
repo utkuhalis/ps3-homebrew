@@ -6,25 +6,106 @@
 const char *flightcam_name(CamMode m)
 {
     switch (m) {
-    case CAM_CHASE:   return "Takip";
-    case CAM_COCKPIT: return "Kokpit";
-    case CAM_FREE:    return "Serbest";
-    default:          return "?";
+    case CAM_CHASE:      return "Chase";
+    case CAM_COCKPIT:    return "Cockpit";
+    case CAM_LEFT_WING:  return "Left Wing";
+    case CAM_RIGHT_WING: return "Right Wing";
+    case CAM_TAIL:       return "Tail";
+    case CAM_FREE:       return "Free";
+    default:             return "?";
+    }
+}
+
+/* Kameranin ileri yonu: (cos(pitch)*sin(yaw), sin(pitch), -cos(pitch)*cos(yaw))
+ * Ters cevirirsek yaw = atan2(dx, -dz), pitch = asin(dy). */
+void flightcam_look_at(const float eye[3], const float target[3],
+                       float *yaw, float *pitch)
+{
+    float dx = target[0] - eye[0];
+    float dy = target[1] - eye[1];
+    float dz = target[2] - eye[2];
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+
+    if (len < 1e-4f) {
+        *yaw = 0.0f;
+        *pitch = 0.0f;
+        return;
+    }
+
+    dx /= len;
+    dy /= len;
+    dz /= len;
+
+    *yaw = atan2f(dx, -dz);
+    *pitch = asinf(dy < -1.0f ? -1.0f : (dy > 1.0f ? 1.0f : dy));
+}
+
+/* Ucak govdesine gore yerel bir noktayi dunya uzayina tasir.
+ * Kamera yerlesimlerinde yatis (roll) bilerek uygulanmaz: ucak yattiginda
+ * kameranin da yan yatmasi TPS goruntusunu okunmaz hale getiriyor. Yalnizca
+ * yaw ve pitch uygulanir. */
+static void mount_point(const Flight *f, const float local[3], float out[3])
+{
+    float cy = cosf(f->yaw),   sy = sinf(f->yaw);
+    float cp = cosf(f->pitch), sp = sinf(f->pitch);
+    float x = local[0];
+    float y = local[1] * cp - local[2] * sp;
+    float z = local[1] * sp + local[2] * cp;
+
+    /* Yaw dondurmesi burun yonuyle tutarli olmali: yerel -Z ekseni dunyada
+     * (sin yaw, 0, -cos yaw) yonune gitmeli - forward_vec ile ayni. Isaret
+     * ters yazilinca kamera bazi yonelimlerde ucagin ONUNE dusuyordu. */
+    out[0] = f->pos[0] + (x * cy - z * sy);
+    out[1] = f->pos[1] + y;
+    out[2] = f->pos[2] + (x * sy + z * cy);
+}
+
+/* Kameranin bakacagi nokta: ucagin govde merkezi, biraz ileride.
+ * Burnun onune bakmak ucus yonunu gorunur kilar. */
+static void aim_point(const Flight *f, float out[3])
+{
+    float local[3];
+
+    local[0] = 0.0f;
+    local[1] = 0.6f;
+    local[2] = -4.0f;           /* burun yonu -Z */
+    mount_point(f, local, out);
+}
+
+/* Her mod icin ucak govdesine gore kamera yerlesimi (x sag, y yukari,
+ * z geri; burun -Z yonunde). */
+static void mount_local(CamMode mode, float out[3])
+{
+    switch (mode) {
+    case CAM_LEFT_WING:
+        out[0] = -7.5f; out[1] = 1.2f; out[2] = 1.0f;
+        break;
+    case CAM_RIGHT_WING:
+        out[0] =  7.5f; out[1] = 1.2f; out[2] = 1.0f;
+        break;
+    case CAM_TAIL:
+        out[0] = 0.0f;  out[1] = 5.0f; out[2] = 30.0f;
+        break;
+    case CAM_CHASE:
+    default:
+        out[0] = 0.0f;  out[1] = 2.8f; out[2] = 11.5f;
+        break;
     }
 }
 
 void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
 {
-    float target[3];
+    float local[3], eye[3], aim[3];
+    float k;
     int i;
 
     if (mode == CAM_FREE)
         return;                 /* serbest modda kamera kendi kontrolunde */
 
     if (mode == CAM_COCKPIT) {
-        aircraft_cockpit_pos(f, target);
+        aircraft_cockpit_pos(f, eye);
         for (i = 0; i < 3; i++)
-            cam->pos[i] = target[i];
+            cam->pos[i] = eye[i];
 
         /* pilot gozunde kamera ucakla birebir ayni yone bakar */
         cam->yaw = f->yaw;
@@ -32,27 +113,25 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
         return;
     }
 
-    /* takip modu: hedefe yumusak yaklasim, boylece manevrada kamera
-     * ucagin arkasinda savrulur ve hiz hissi olusur */
-    aircraft_chase_pos(f, target);
-    {
-        float k = dt * 6.0f;
+    mount_local(mode, local);
+    mount_point(f, local, eye);
+    aim_point(f, aim);
 
+    /* Kanat kameralari govdeye sabittir (titremesin diye lerp yok).
+     * Takip ve kuyruk kameralari yumusak yaklasir; manevrada kamera geride
+     * savrulur ve hiz hissi olusur. */
+    if (mode == CAM_LEFT_WING || mode == CAM_RIGHT_WING) {
+        for (i = 0; i < 3; i++)
+            cam->pos[i] = eye[i];
+    } else {
+        k = dt * 6.0f;
         if (k > 1.0f)
             k = 1.0f;
-
         for (i = 0; i < 3; i++)
-            cam->pos[i] += (target[i] - cam->pos[i]) * k;
-
-        /* bakis acisi da yumusak takip eder */
-        {
-            float dyaw = f->yaw - cam->yaw;
-
-            while (dyaw >  3.14159265f) dyaw -= 6.28318531f;
-            while (dyaw < -3.14159265f) dyaw += 6.28318531f;
-
-            cam->yaw += dyaw * k;
-            cam->pitch += (f->pitch * 0.6f - cam->pitch) * k;
-        }
+            cam->pos[i] += (eye[i] - cam->pos[i]) * k;
     }
+
+    /* Konum neresi olursa olsun kamera ucaga bakar: ucak her zaman
+     * ekranin ortasinda kalir. */
+    flightcam_look_at(cam->pos, aim, &cam->yaw, &cam->pitch);
 }

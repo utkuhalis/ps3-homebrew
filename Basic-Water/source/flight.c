@@ -12,9 +12,16 @@
 #define CD_SPOILER       0.16f
 #define SPOILER_LIFT_LOSS 0.55f  /* tam spoiler tasimanin bu oranini kirar */
 
-#define PITCH_RATE       1.25f   /* radyan/saniye, tam girdide */
-#define ROLL_RATE        2.10f
-#define YAW_RATE         0.60f
+/* Tam girdide donme hizlari (radyan/saniye). Ilk degerler (1.25 / 2.10)
+ * saniyede 71 ve 120 derece ediyordu; ucak ucaktan cok oyuncak gibi
+ * donuyordu. Bir is jeti icin 30-50 derece/saniye gercekci. */
+#define PITCH_RATE       0.62f
+#define ROLL_RATE        1.55f
+#define YAW_RATE         0.42f
+
+/* Statik kararlilik: burun kendiliginden hava akisi yonune doner.
+ * Gercek ucagi "kendi ucan" bir sey yapan sey budur. */
+#define PITCH_STABILITY  0.85f
 #define FUEL_BURN_KGS    0.55f   /* tam gazda saniyede yanan yakit */
 
 static float clampf(float v, float lo, float hi)
@@ -37,17 +44,20 @@ static void forward_vec(const Flight *f, float out[3])
     out[2] = -cp * cosf(f->yaw);
 }
 
-/* Yukari yon: roll ile yatar */
+/* Yukari yon: govde (0,1,0) ekseninin dunyadaki karsiligi.
+ * Yonelim matrisinden turetilir; boylece tasima yonu ile modelin gorsel
+ * yatisi hicbir zaman ayrisamaz. */
 static void up_vec(const Flight *f, float out[3])
 {
-    float cr = cosf(f->roll), sr = sinf(f->roll);
-    float cy = cosf(f->yaw),  sy = sinf(f->yaw);
-    float sp = sinf(f->pitch), cp = cosf(f->pitch);
+    float m[3][3];
 
-    out[0] = -sp * sy * cr - cy * sr;
-    out[1] =  cp * cr;
-    out[2] =  sp * cy * cr - sy * sr;
+    flight_orientation_matrix(f, m);
+    out[0] = m[0][1];
+    out[1] = m[1][1];
+    out[2] = m[2][1];
 }
+
+void flight_orientation_matrix(const Flight *f, float m[3][3]);
 
 /* Tasima katsayisi: hucum acisiyla dogrusal artar, stall acisindan sonra
  * hizla coker. Flap hem katsayiyi hem kritik aciyi artirir. */
@@ -55,16 +65,30 @@ static float lift_coefficient(float aoa, float flap)
 {
     float stall = STALL_ANGLE_RAD + flap * 0.06f;
     float cl = aoa * CL_SLOPE + flap * CL_FLAP;
+    float mag = aoa < 0.0f ? -aoa : aoa;
     float over;
 
-    if (aoa <= stall)
+    /* Kanat her iki yonde de stall eder. Onceden yalnizca pozitif taraf
+     * sinirlaniyordu; burun asagi dalista hucum acisi -1.3 radyana kadar
+     * gidip tasima katsayisi -6'ya ciktigi icin ucak yanlara firliyordu. */
+    if (mag <= stall)
         return cl;
 
-    /* stall sonrasi: tasima keskin dusus */
-    over = (aoa - stall) / 0.20f;
+    over = (mag - stall) / 0.20f;
     if (over > 1.0f)
         over = 1.0f;
-    return cl * (1.0f - 0.85f * over);
+    cl *= (1.0f - 0.85f * over);
+
+    /* Cok buyuk acilarda kanat artik kanat degildir: tasima sifira gider. */
+    if (mag > 1.05f) {
+        float fade = (1.57f - mag) / 0.52f;
+
+        if (fade < 0.0f)
+            fade = 0.0f;
+        cl *= fade;
+    }
+
+    return cl;
 }
 
 float flight_lift_force(float airspeed, float aoa, float flap, float spoiler)
@@ -78,12 +102,102 @@ float flight_lift_force(float airspeed, float aoa, float flap, float spoiler)
 
 float flight_drag_force(float airspeed, float aoa, float flap, float spoiler)
 {
+    return flight_drag_force_full(airspeed, aoa, flap, spoiler, 0);
+}
+
+float flight_drag_force_full(float airspeed, float aoa, float flap,
+                             float spoiler, int gear_down)
+{
     float cl = lift_coefficient(aoa, flap);
     float cd = CD_BASE + CD_INDUCED * cl * cl
-               + CD_FLAP * flap + CD_SPOILER * spoiler;
+               + CD_FLAP * flap + CD_SPOILER * spoiler
+               + (gear_down ? GEAR_DRAG : 0.0f);
     float q = 0.5f * AIR_DENSITY * airspeed * airspeed * WING_AREA_M2;
 
     return cd * q;
+}
+
+/* Govde koordinatini dunyaya tasir: once roll (Z), sonra pitch (X),
+ * sonra yaw (Y).
+ *
+ * Yaw, burun yonuyle ayni konvansiyonda olmali: yerel -Z ekseni dunyada
+ * (sin yaw, 0, -cos yaw) yonune gider - forward_vec ile birebir ayni.
+ * X bileseni ters yazildigi icin ucak modeli, ucagin gercekte gittigi
+ * yonden farkli bir yone bakiyordu ve pistte yamuk duruyordu. */
+void flight_body_to_world(const Flight *f, const float in[3], float out[3])
+{
+    float cr = cosf(f->roll),  sr = sinf(f->roll);
+    float cp = cosf(f->pitch), sp = sinf(f->pitch);
+    float cy = cosf(f->yaw),   sy = sinf(f->yaw);
+    float x1, y1, z1, x2, y2, z2;
+
+    /* Pozitif roll SAGA yatistir: sag kanat asagi iner. Ilk yazimda isaret
+     * tersti; model sola yatarken fizik (yaw += sin(roll)) saga donduruyordu,
+     * yani kumanda gorsel olarak ters calisiyordu. */
+    x1 = in[0] * cr + in[1] * sr;
+    y1 = -in[0] * sr + in[1] * cr;
+    z1 = in[2];
+
+    y2 = y1 * cp - z1 * sp;
+    z2 = y1 * sp + z1 * cp;
+    x2 = x1;
+
+    out[0] = f->pos[0] + (x2 * cy - z2 * sy);
+    out[1] = f->pos[1] + y2;
+    out[2] = f->pos[2] + (x2 * sy + z2 * cy);
+}
+
+/* Yonelim matrisi (3x3, satir oncelikli): flight_body_to_world'un oteleme
+ * disindaki kismi. Cok vertexli model cizerken trigonometriyi vertex basina
+ * degil kare basina bir kez hesaplamak icin ayrildi.
+ *
+ * Katsayilar flight_body_to_world acilarak turetildi; test bu ikisinin
+ * birebir ayni sonucu verdigini dogrular. */
+void flight_orientation_matrix(const Flight *f, float m[3][3])
+{
+    float cr = cosf(f->roll),  sr = sinf(f->roll);
+    float cp = cosf(f->pitch), sp = sinf(f->pitch);
+    float cy = cosf(f->yaw),   sy = sinf(f->yaw);
+
+    m[0][0] =  cr * cy + sr * sp * sy;
+    m[0][1] =  sr * cy - cr * sp * sy;
+    m[0][2] = -cp * sy;
+
+    m[1][0] = -sr * cp;
+    m[1][1] =  cr * cp;
+    m[1][2] = -sp;
+
+    m[2][0] =  cr * sy - sr * sp * cy;
+    m[2][1] =  sr * sy + cr * sp * cy;
+    m[2][2] =  cp * cy;
+}
+
+void flight_init_on_runway(Flight *f, const float runway_xz[2], float heading,
+                           float start_offset)
+{
+    memset(f, 0, sizeof(*f));
+
+    /* Pistin BASINDA, tekerlekler uzerinde, duruyor. Onceden pist merkezine
+     * konuyordu ve kalkis kosusuna yalnizca yarim pist kaliyordu. */
+    f->pos[0] = runway_xz[0] - sinf(heading) * start_offset;
+    f->pos[1] = DECK_Y + GEAR_HEIGHT;
+    f->pos[2] = runway_xz[1] + cosf(heading) * start_offset;
+
+    f->yaw = heading;
+    f->throttle = 0.0f;         /* motor rolantide, kalkisi oyuncu yapar */
+    f->fuel_kg = FUEL_FULL_KG;
+    f->mass_kg = EMPTY_MASS_KG + FUEL_FULL_KG;
+
+    f->gear_down = 1;
+    f->gear_pos = 1.0f;
+    f->flap = 0.34f;            /* kalkis icin bir kademe flap */
+    f->on_ground = 1;
+    f->airborne = 0;
+
+    f->ground_ref[0] = runway_xz[0];
+    f->ground_ref[1] = DECK_Y;
+    f->ground_ref[2] = runway_xz[1];
+    f->ground_radius = 620.0f;
 }
 
 void flight_init(Flight *f, const float start_pos[3], float start_yaw)
@@ -98,6 +212,9 @@ void flight_init(Flight *f, const float start_pos[3], float start_yaw)
     f->throttle = 0.35f;
     f->fuel_kg = FUEL_FULL_KG;
     f->mass_kg = EMPTY_MASS_KG + FUEL_FULL_KG;
+    f->gear_down = 0;
+    f->gear_pos = 0.0f;
+    f->airborne = 1;
 
     /* havada baslar: burun yonunde bir miktar hiz */
     {
@@ -119,10 +236,38 @@ void flight_update(Flight *f, float dt)
     if (dt <= 0.0f)
         return;
 
-    /* --- kumanda girdileri yonelimi degistirir --- */
-    f->pitch += f->in_pitch * PITCH_RATE * dt;
-    f->roll  += f->in_roll  * ROLL_RATE  * dt;
-    f->yaw   += f->in_yaw   * YAW_RATE   * dt;
+    /* --- kumanda girdileri yonelimi degistirir ---
+     *
+     * Girdi dogrudan aciyi degil, hedef ACISAL HIZI belirler; gercek acisal
+     * hiz hedefe atalet zaman sabitiyle yaklasir. Boylece ucagin kutlesi
+     * hissedilir: kumanda aninda karsilik vermez, birakildiginda donme
+     * hemen kesilmez.
+     *
+     * Etkinlik ayrica dinamik basincla (hizin karesiyle) olceklenir: yerde
+     * duran ucak kumandaya tepki vermez, yavas ucusta kumandalar agirdir. */
+    {
+        float v = len3(f->vel);
+        float q = (v * v) / (CONTROL_REF_MS * CONTROL_REF_MS);
+        float kp, kr, ky;
+
+        if (q > 1.35f)
+            q = 1.35f;
+
+        kp = dt / PITCH_INERTIA_S;
+        kr = dt / ROLL_INERTIA_S;
+        ky = dt / YAW_INERTIA_S;
+        if (kp > 1.0f) kp = 1.0f;
+        if (kr > 1.0f) kr = 1.0f;
+        if (ky > 1.0f) ky = 1.0f;
+
+        f->p_rate += (f->in_pitch * PITCH_RATE * q - f->p_rate) * kp;
+        f->r_rate += (f->in_roll  * ROLL_RATE  * q - f->r_rate) * kr;
+        f->y_rate += (f->in_yaw   * YAW_RATE   * q - f->y_rate) * ky;
+
+        f->pitch += f->p_rate * dt;
+        f->roll  += f->r_rate * dt;
+        f->yaw   += f->y_rate * dt;
+    }
 
     /* yatis burnu cevirir (koordineli donus) */
     f->yaw += sinf(f->roll) * 0.55f * dt;
@@ -140,18 +285,64 @@ void flight_update(Flight *f, float dt)
     speed = len3(f->vel);
     f->airspeed = speed;
 
-    /* --- hucum acisi: burun yonu ile gercek hareket yonu arasindaki fark --- */
+    /* --- hucum acisi ---
+     *
+     * Hiz vektoru ile burun arasindaki TOPLAM aciyi almak yanlisti: yan
+     * kayma (sideslip) da hucum acisina karisiyordu, bu yuzden her donuste
+     * sahte STALL uyarisi cikiyordu. Dogrusu hizi govde eksenlerine cevirip
+     * yalnizca DIKEY bileseni kullanmaktir. */
     if (speed > 1.0f) {
-        float dot = (f->vel[0] * fwd[0] + f->vel[1] * fwd[1] + f->vel[2] * fwd[2]) / speed;
-        f->aoa = acosf(clampf(dot, -1.0f, 1.0f));
-        /* isaret: hareket yonu burnun altindaysa pozitif hucum acisi */
-        if (f->vel[1] / speed > fwd[1])
-            f->aoa = -f->aoa;
+        float m[3][3];
+        float vbx, vby, vbz;
+
+        flight_orientation_matrix(f, m);
+
+        /* v_body = M^T * v_world */
+        vbx = m[0][0] * f->vel[0] + m[1][0] * f->vel[1] + m[2][0] * f->vel[2];
+        vby = m[0][1] * f->vel[0] + m[1][1] * f->vel[1] + m[2][1] * f->vel[2];
+        vbz = m[0][2] * f->vel[0] + m[1][2] * f->vel[1] + m[2][2] * f->vel[2];
+
+        (void)vbx;                  /* yan kayma tasimayi etkilemiyor */
+        f->aoa = atan2f(-vby, -vbz);
     } else {
         f->aoa = 0.0f;
     }
 
-    f->stalled = (f->aoa > STALL_ANGLE_RAD + f->flap * 0.06f);
+    /* Stall uyarisi: kritik aci ANLIK asildiginda degil, bir sure uzerinde
+     * kalindiginda verilir. Manevrada aci kisa sureligine sinira degebilir;
+     * her dokunusta korna calmasi uyariyi anlamsizlastiriyordu. */
+    {
+        float crit = STALL_ANGLE_RAD + f->flap * 0.06f;
+
+        if (f->aoa > crit)
+            f->stall_timer += dt;
+        else
+            f->stall_timer -= dt * 2.0f;    /* cikis daha hizli */
+
+        f->stall_timer = clampf(f->stall_timer, 0.0f, 1.0f);
+        f->stalled = (f->stall_timer > 0.28f);
+    }
+
+    /* Statik kararlilik ve trim.
+     *
+     * Ucak hucum acisini SIFIRA degil, agirligini tasiyan TRIM acisina
+     * dogru cevirir. Sifira cekmek yanlisti: sifir hucum acisinda kanat
+     * tasima uretmez, ucak dusup hucum acisini buyutuyor ve sonunda takla
+     * atiyordu. Gercek ucakta bu dengeyi kuyruk ve trim kurar; sonuc,
+     * kumanda birakildiginda ucagin kendi kendine duz ucmasidir. */
+    if (speed > 12.0f) {
+        float q = 0.5f * AIR_DENSITY * speed * speed * WING_AREA_M2;
+        float cl_needed = (f->mass_kg * GRAVITY) / (q > 1.0f ? q : 1.0f);
+        float trim_aoa = (cl_needed - f->flap * CL_FLAP) / CL_SLOPE;
+        float k = PITCH_STABILITY * dt;
+        float damp = speed / CONTROL_REF_MS;
+
+        trim_aoa = clampf(trim_aoa, -0.05f, STALL_ANGLE_RAD * 0.85f);
+
+        if (damp > 1.2f)
+            damp = 1.2f;
+        f->pitch -= (f->aoa - trim_aoa) * k * damp;
+    }
 
     /* --- kuvvetler --- */
     thrust = f->throttle * MAX_THRUST_N;
@@ -159,7 +350,22 @@ void flight_update(Flight *f, float dt)
         thrust = 0.0f;                      /* yakit bitti: suzulme */
 
     lift = flight_lift_force(speed, f->aoa, f->flap, f->spoiler);
-    drag = flight_drag_force(speed, f->aoa, f->flap, f->spoiler);
+
+    /* Kanat yuklemesi: sert donuste tasima agirligin katina cikar.
+     * Yapisal sinir asilirsa tasima kirpilir - ucak "cekmiyor". */
+    f->g_load = lift / (f->mass_kg * GRAVITY);
+
+    /* Sinir iki yonde de gecerli. Onceden yalnizca pozitif G kirpiliyordu;
+     * ters yonde -30 G'ye varan tasima serbest kaliyor ve ucagi firlatiyordu. */
+    if (f->g_load > G_LIMIT) {
+        lift *= G_LIMIT / f->g_load;
+        f->g_load = G_LIMIT;
+    } else if (f->g_load < -G_NEG_LIMIT) {
+        lift *= -G_NEG_LIMIT / f->g_load;
+        f->g_load = -G_NEG_LIMIT;
+    }
+    drag = flight_drag_force_full(speed, f->aoa, f->flap, f->spoiler,
+                                  f->gear_down);
 
     f->mass_kg = EMPTY_MASS_KG + (f->fuel_kg > 0.0f ? f->fuel_kg : 0.0f);
 
@@ -188,13 +394,105 @@ void flight_update(Flight *f, float dt)
         f->pos[i] += f->vel[i] * dt;
     }
 
-    /* --- deniz yuzeyi: altina inilemez --- */
-    f->on_ground = 0;
-    if (f->pos[1] < WATER_SAFE_ALT) {
-        f->pos[1] = WATER_SAFE_ALT;
-        if (f->vel[1] < 0.0f)
-            f->vel[1] = 0.0f;
-        f->on_ground = 1;
+    /* --- tekerlek animasyonu --- */
+    {
+        float target = f->gear_down ? 1.0f : 0.0f;
+        float step = dt * 1.2f;
+
+        if (f->gear_pos < target) {
+            f->gear_pos += step;
+            if (f->gear_pos > target) f->gear_pos = target;
+        } else if (f->gear_pos > target) {
+            f->gear_pos -= step;
+            if (f->gear_pos < target) f->gear_pos = target;
+        }
+    }
+
+    /* --- pist yuzeyi ile temas ---
+     * Pist alaninin uzerindeysek ve yeterince alcaksak tekerlekler yere
+     * basar: dikey hiz kesilir, yatay hizi surtunme yavaslatir. Burun ancak
+     * yeterli hizda kalkabilir (rotate hizi), boylece kalkis gercekci olur. */
+    {
+        float deck_top = DECK_Y + (f->gear_down ? GEAR_HEIGHT : 0.4f);
+        float dx = f->pos[0] - f->ground_ref[0];
+        float dz = f->pos[2] - f->ground_ref[2];
+        int over_runway = (dx * dx + dz * dz) < (f->ground_radius * f->ground_radius);
+
+        f->on_ground = 0;
+
+        if (over_runway && f->pos[1] <= deck_top) {
+            float horiz;
+
+            f->pos[1] = deck_top;
+            if (f->vel[1] < 0.0f)
+                f->vel[1] = 0.0f;
+            f->on_ground = 1;
+
+            /* yerdeyken burun asagi gitmez, yatis duzelir */
+            if (f->pitch < 0.0f)
+                f->pitch = 0.0f;
+            f->roll -= f->roll * (dt * 4.0f);
+
+            /* yeterli hiz yoksa burun kalkmaz */
+            horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
+            if (horiz < ROTATE_SPEED_MS && f->pitch > 0.06f)
+                f->pitch = 0.06f;
+
+            /* Tekerlek surtunmesi ve fren.
+             * Surtunme sabit bir yavaslama uretir (mu * g); carpimsal
+             * yazilirsa hiza orantili olur ve ucak kalkis hizina hic
+             * ulasamaz - ilk yazimda bu hata vardi. */
+            {
+                float mu = ROLL_FRICTION
+                           + ((f->brakes || f->spoiler > 0.5f) ? BRAKE_FRICTION : 0.0f);
+                float decel = mu * GRAVITY * dt;
+                float horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
+
+                if (horiz > 0.001f) {
+                    float nh = horiz - decel;
+
+                    if (nh < 0.0f)
+                        nh = 0.0f;
+                    f->vel[0] *= nh / horiz;
+                    f->vel[2] *= nh / horiz;
+                }
+            }
+        } else if (f->pos[1] < WATER_SAFE_ALT) {
+            /* Deniz yuzeyi: altina inilemez. Su, tekerlekten cok daha fazla
+             * direnc gosterir - ucak burada serbestce kayamaz. */
+            float horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
+
+            f->pos[1] = WATER_SAFE_ALT;
+            if (f->vel[1] < 0.0f)
+                f->vel[1] = 0.0f;
+            f->on_ground = 1;
+
+            if (horiz > 0.001f) {
+                float nh = horiz - WATER_DRAG * GRAVITY * dt;
+
+                if (nh < 0.0f)
+                    nh = 0.0f;
+                f->vel[0] *= nh / horiz;
+                f->vel[2] *= nh / horiz;
+            }
+        }
+
+        if (!f->on_ground && f->pos[1] > DECK_Y + 6.0f)
+            f->airborne = 1;
+    }
+
+    /* --- tekerlek donusu (animasyon icin) ---
+     * Yerdeyken tekerlek hizla orantili doner; havadayken yavaslar. */
+    {
+        float horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
+
+        if (f->on_ground)
+            f->wheel_spin += (horiz / WHEEL_RADIUS_M) * dt;
+        else
+            f->wheel_spin += (horiz / WHEEL_RADIUS_M) * dt * 0.35f;
+
+        while (f->wheel_spin > 6.28318531f)
+            f->wheel_spin -= 6.28318531f;
     }
 
     /* --- yakit --- */

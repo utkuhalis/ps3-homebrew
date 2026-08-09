@@ -1,79 +1,129 @@
 # Basic Water
 
-PS3 üzerinde 3D deniz + gökyüzü sahnesi, serbest uçan kamera ve su yüzeyi
-çarpışması. Bir flight simulator projesinin ilk adımı.
+A flight simulator on the PS3: a real aircraft over an open sea, with flight
+physics, runways, weather, instruments and autopilot.
 
-Tüm derleme Docker içindedir — host makineye SDK/derleyici kurulmaz.
+The whole toolchain runs inside Docker — no SDK or compiler is installed on the
+host machine.
 
-## Derleme
+## Download
 
-```sh
-./build.sh          # .self + .pkg üretir
-./build.sh test     # matematik ve kamera birim testleri
-./build.sh clean    # çıktıları temizler
-```
+Pre-built packages are attached to the [latest release](../../releases/latest).
 
-### Neden iki imaj kullanılıyor
-
-| Aşama | İmaj | Sebep |
-|---|---|---|
-| Cg shader derleme | `ps3-cgcomp` (amd64) | `cgcomp`, NVIDIA Cg Toolkit'e ihtiyaç duyar ve Cg Toolkit yalnızca x86 için vardır |
-| PS3 derlemesi | `zeldin/ps3dev-docker` (arm64) | Apple Silicon'da native hızda çalışır |
-
-Shader'ların çıktısı (`.vpo`/`.fpo`) RSX mikrokodudur — mimariden bağımsızdır,
-bu yüzden amd64'te üretilip arm64 derlemesine sorunsuz girer. `build.sh` bu iki
-adımı zincirler, sen tek komut çalıştırırsın.
-
-### Çıktılar
-
-| Dosya | Nerede kullanılır |
+| File | Use |
 |---|---|
+| `basicwater.pkg` | Real PS3 (CFW/HEN) — install via Package Manager |
 | `basicwater.fake.self` | RPCS3 — File → Boot SELF/ELF |
-| `basicwater.pkg` | Gerçek PS3 (CFW) — USB'den kur |
 
-## Kontroller
-
-| İşlem | Kol |
-|---|---|
-| İleri / geri | Sol analog ↑↓ (veya D-pad ↑↓) |
-| Yanlara kayma | Sol analog ←→ |
-| Bakış (yaw / pitch) | Sağ analog |
-| Yüksel / alçal | R1 / L1 |
-| Çıkış | START |
-
-Kamera su yüzeyinin 2 birim üstünden aşağı inemez.
-
-## Görsel önizleme (PS3 gerekmeden)
-
-Kamera ve projeksiyon matematiği host'ta tel-kafes olarak çizilip PNG'ye
-dökülebilir — "kamera doğru yere bakıyor mu" sorusu emülatöre gitmeden görülür:
+## Building
 
 ```sh
-docker run --rm -v "$PWD":/project -w /project alpine:3.20 sh -c '
-  apk add --no-cache build-base imagemagick >/dev/null &&
-  gcc -O1 -o build-test/preview tests/preview.c source/mat4.c source/camera.c -lm &&
-  ./build-test/preview && cd build-test &&
-  for f in *.ppm; do magick "$f" "${f%.ppm}.png"; done'
+./build.sh          # produces .self + .pkg
+./build.sh test     # host-side unit tests
+./build.sh clean    # removes build outputs
 ```
 
-## Kod yapısı
+Deployment helpers:
 
-| Dosya | Sorumluluk |
+```sh
+./build.sh gonder <PS3_IP>     # upload the .pkg over FTP
+./build.sh calistir <PS3_IP>   # run the .self directly via ps3load
+./build.sh log <PS3_IP>        # fetch /dev_hdd0/tmp/basicwater.log
+```
+
+### Why two Docker images
+
+| Stage | Image | Reason |
+|---|---|---|
+| Cg shader compilation | `ps3-cgcomp` (amd64) | `cgcomp` needs the NVIDIA Cg Toolkit, which exists for x86 only |
+| PS3 build | `zeldin/ps3dev-docker` (arm64) | Runs natively on Apple Silicon |
+
+Shader output (`.vpo`/`.fpo`) is RSX microcode and architecture-independent, so
+it is produced on amd64 and linked into the arm64 build. `build.sh` chains both
+steps; you run one command.
+
+## Controls
+
+| Action | Pad | Keyboard (RPCS3 default) |
+|---|---|---|
+| Pitch / roll | Left stick (or D-pad) | W A S D / arrow keys |
+| Throttle up | R2 or R1 | T or E |
+| Throttle down | L2 or L1 | R or Q |
+| Flap notch | Square | Z |
+| Spoiler + brakes | Triangle (hold) | V |
+| Landing gear | Cross | X |
+| Camera mode | Circle | C |
+| Autopilot | R3 | G |
+| Settings menu | Select | Space |
+| Quit | Start | Enter |
+
+Camera modes cycle through Chase, Cockpit, Left Wing, Right Wing, Tail and
+Free.
+
+### Taking off
+
+The aircraft starts stopped at the head of the runway, engine at idle. Hold
+the throttle key until the on-screen strip shows you have reached rotation
+speed, then pull back. The strip disappears once you are airborne.
+
+## Flight model
+
+Not a full aerodynamic simulation, but built on the same quantities a real one
+uses, and tuned to the numbers of a light business jet:
+
+- Thrust-to-weight 0.52, wing area 28 m², empty mass 3800 kg
+- Lift and drag from dynamic pressure and angle of attack, with stall in
+  **both** directions and lift decaying to zero past 60°
+- Angle of attack is computed in body axes, so sideslip does not contaminate
+  it (measuring the total angle between velocity and nose produced false stall
+  warnings in every turn)
+- Angular inertia: the stick commands a target rate, and the actual rate
+  approaches it with a time constant — the aircraft does not snap to input and
+  does not stop turning the instant you let go
+- Control authority scales with dynamic pressure; a parked aircraft ignores
+  the stick
+- Trim stability: the nose settles at the angle of attack that carries the
+  aircraft's weight, so it flies straight hands-off
+- G-loading with structural limits (+3.2 / −1.6)
+- Ground contact with rolling and braking friction, rotation-speed gate, and
+  much heavier drag on water
+
+## Aircraft model
+
+A real glTF asset (`assets/model/plane.glb`, 60k triangles) converted to a flat
+binary at build time by `tools/glb_to_mesh.py` — pure Python, no dependencies.
+
+Control surfaces are separated into their own meshes by
+`tools/blender/split_surfaces.py`, which runs in headless Blender (no add-on
+required). The wing is swept, so the trailing edge is cut with a matching
+slanted plane. Flaps, ailerons and the rudder then rotate about hinges derived
+from their own geometry.
+
+## Testing without a PS3
+
+Hardware code (RSX, pad, audio) cannot be unit tested, so everything that can
+be pure is pure and tested on the host:
+
+| Suite | Covers |
 |---|---|
-| `source/mat4.c` | 4×4 matris matematiği — donanımsız, birim testli |
-| `source/camera.c` | Kamera durumu, hareket, su çarpışması — donanımsız, birim testli |
-| `source/rsx3d.c` | RSX kurulumu, derinlik tamponu, çizim ortamı, flip |
-| `source/scene.c` | Deniz geometrisi, shader yükleme, çizim |
-| `source/input.c` | Pad okuma, analog eksenler, ölü bölge |
-| `source/main.c` | Ana döngü |
-| `shaders/water.vcg` | Vertex programı — MVP dönüşümü |
-| `shaders/water.fcg` | Fragment programı — prosedürel ızgara + mesafe fog'u |
+| `test_math` | matrices, projection, camera collision |
+| `test_flight` | lift, drag, stall, takeoff, gear, fuel |
+| `test_camview` | camera aiming, orientation matrix, artificial horizon |
+| `test_autopilot` | altitude/heading hold, bank limits, stall protection |
+| `test_atmosphere` | weather and time-of-day combinations |
+| `test_menu` | menu state machine |
+| `test_mesh` | model file parsing against the real data file |
 
-Deniz `y=0` düzleminde 8000×8000 birimlik bir ızgara. Kamera hareket ettikçe
-düzlem ızgara aralığının katlarına yuvarlanarak kaydırılır; böylece sonsuz
-deniz hissi verirken ızgara dünyada sabit görünür.
+`build.sh test` also greps the source for two regressions that once shipped:
+flight state being reset inside the main loop, and controls not being bound.
 
-## Sonraki adımlar (bu projede yok)
+Rendering is checked before it reaches hardware. `tools/ui_preview.c`
+rasterises the HUD the way the GPU does (pixel-centre coverage, MSAA off) and
+writes a PNG, so half-pixel geometry that would silently vanish on the console
+is visible on the host.
 
-Uçak modeli ve uçuş fiziği, dalgalanan su, gökyüzü kubbesi ve bulutlar,
-arazi/ada, HUD.
+## Diagnostics
+
+The game writes a boot log to `/dev_hdd0/tmp/basicwater.log` on the console.
+`./build.sh log <PS3_IP>` fetches it. When the model loader once rejected its
+own data file, that log named the failing call directly.

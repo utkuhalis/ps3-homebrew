@@ -5,7 +5,7 @@
 #define PANEL_X   360
 #define PANEL_Y   180
 #define PANEL_W   560
-#define PANEL_H   300
+#define PANEL_H   320
 
 #define COL_PANEL   RGB(6, 14, 26)
 #define COL_BORDER  RGB(120, 190, 255)
@@ -15,17 +15,17 @@
 #define COL_HINT    RGB(120, 140, 160)
 
 static const char *ROW_LABEL[ROW_COUNT] = {
-    "Hava", "Gün", "HUD", "Çıkış"
+    "Weather", "Time", "HUD", "Quit"
 };
 
 const char *weather_name(Weather w)
 {
     switch (w) {
-    case WEATHER_SUNNY:  return "Güneşli";
-    case WEATHER_CLOUDY: return "Bulutlu";
-    case WEATHER_RAINY:  return "Yağmurlu";
-    case WEATHER_FOGGY:  return "Sisli";
-    case WEATHER_STORMY: return "Fırtınalı";
+    case WEATHER_SUNNY:  return "Clear";
+    case WEATHER_CLOUDY: return "Cloudy";
+    case WEATHER_RAINY:  return "Rainy";
+    case WEATHER_FOGGY:  return "Foggy";
+    case WEATHER_STORMY: return "Stormy";
     default:             return "?";
     }
 }
@@ -33,9 +33,9 @@ const char *weather_name(Weather w)
 const char *time_name(TimeOfDay t)
 {
     switch (t) {
-    case TIME_DAY:    return "Gündüz";
-    case TIME_SUNSET: return "Gün Batımı";
-    case TIME_NIGHT:  return "Gece";
+    case TIME_DAY:    return "Day";
+    case TIME_SUNSET: return "Sunset";
+    case TIME_NIGHT:  return "Night";
     default:          return "?";
     }
 }
@@ -106,7 +106,7 @@ static const char *row_value(const GameMenu *m, int row)
     switch (row) {
     case ROW_WEATHER: return weather_name(m->weather);
     case ROW_TIME:    return time_name(m->time);
-    case ROW_HUD:     return m->hud_visible ? "Açık" : "Kapalı";
+    case ROW_HUD:     return m->hud_visible ? "On" : "Off";
     default:          return "";
     }
 }
@@ -125,7 +125,7 @@ void gamemenu_draw(const GameMenu *m)
     overlay_fill_rect(PANEL_X, PANEL_Y, 2, PANEL_H, COL_BORDER);
     overlay_fill_rect(PANEL_X + PANEL_W - 2, PANEL_Y, 2, PANEL_H, COL_BORDER);
 
-    font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + 26, 3, "AYARLAR", COL_TITLE);
+    font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + 26, 3, "SETTINGS", COL_TITLE);
 
     for (i = 0; i < ROW_COUNT; i++) {
         int y = PANEL_Y + 90 + i * 46;
@@ -146,7 +146,13 @@ void gamemenu_draw(const GameMenu *m)
         }
     }
 
+    font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + PANEL_H - 52, 1,
+                     "D-pad: select   Left/Right: change   SELECT: close",
+                     COL_HINT);
     font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + PANEL_H - 34, 1,
-                     "Yön: seç   Sol/Sağ: değiştir   X: onayla   SELECT: kapat",
+                     "FLIGHT:  R1/R2 throttle   Square flaps   Triangle spoiler",
+                     COL_HINT);
+    font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + PANEL_H - 18, 1,
+                     "Cross gear   Circle camera   R3 autopilot",
                      COL_HINT);
 }

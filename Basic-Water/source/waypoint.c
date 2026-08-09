@@ -6,6 +6,8 @@
 #include "font.h"
 #include "runway.h"
 
+#define EDGE_TOP     90
+#define EDGE_BOTTOM 470
 #define MARGIN 46.0f
 
 #define COL_MARK   RGB(240, 205, 95)
@@ -55,8 +57,10 @@ void waypoint_project(const Mat4 *vp, const Camera *cam, const float world[3],
 
         if (out->sx < MARGIN)          out->sx = MARGIN;
         if (out->sx > OVL_W - MARGIN)  out->sx = OVL_W - MARGIN;
-        if (out->sy < MARGIN)          out->sy = MARGIN;
-        if (out->sy > OVL_H - MARGIN)  out->sy = OVL_H - MARGIN;
+        /* Kenar oklari HUD panellerinin uzerine binmesin: alt serit
+         * gostergelere, en ust serit gorev listesine ayrilmistir. */
+        if (out->sy < EDGE_TOP)     out->sy = EDGE_TOP;
+        if (out->sy > EDGE_BOTTOM)  out->sy = EDGE_BOTTOM;
     } else {
         out->edge_angle = 0.0f;
     }

@@ -18,10 +18,10 @@
 
 /* Gorev metinleri ve kurallari tek yerde dursun diye ayni siradalar */
 static const char *TEXT[OBJ_COUNT] = {
-    "Kalkış pistini bul",
-    "1000 m üzerine çık",
-    "200 km/s hıza ulaş",
-    "İniş pistine yaklaş"
+    "Find the departure runway",
+    "Climb above 1000 m",
+    "Reach 200 km/h",
+    "Approach the arrival runway"
 };
 
 /* Bir noktaya yatay uzaklik (yukseklik farki sayilmaz) */
@@ -80,7 +80,7 @@ void objectives_draw(const Objectives *o)
     overlay_fill_rect(PANEL_X, PANEL_Y, PANEL_W, 2, COL_EDGE);
     overlay_fill_rect(PANEL_X, PANEL_Y + PANEL_H - 1, PANEL_W, 1, COL_EDGE);
 
-    font_draw_text(PANEL_X + 14, PANEL_Y + 10, 2, "GÖREVLER", COL_TITLE);
+    font_draw_text(PANEL_X + 14, PANEL_Y + 10, 2, "OBJECTIVES", COL_TITLE);
 
     for (i = 0; i < OBJ_COUNT; i++) {
         int y = PANEL_Y + 40 + i * 22;

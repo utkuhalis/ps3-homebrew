@@ -19,4 +19,11 @@ float gauge_alt_angle(float meters);
 void gauges_draw(float speed_kmh, float altitude_m, float pitch_rad,
                  float roll_rad);
 
+/* Suni ufku istenen konumda cizer (onizleme ve test icin acik) */
+void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll);
+
+/* Suni ufuk yardimcilari - saf, birim testli */
+float gauge_horizon_dist(float dx, float dy, float roll, float shift);
+float gauge_horizon_shift(float pitch, float r);
+
 #endif

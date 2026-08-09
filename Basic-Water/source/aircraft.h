@@ -6,12 +6,12 @@
 #include "mat4.h"
 #include "atmosphere.h"
 
-/* Ucak govdesi ve hareketli kumanda yuzeyleri.
+/* Ucak govdesi.
  *
- * Model kodla uretilir; govde, kanatlar, kuyruk ve motorlar sabit, flap,
- * aileron, spoiler, elevator ve rudder ise kendi mentese eksenlerinde doner.
- * Her karede tum parcalar ucagin konum ve yonelimine gore donusturulup tek
- * cizim cagrisinda gonderilir. */
+ * Model gercek bir glTF varligindan gelir (assets/model/plane.glb);
+ * tools/glb_to_mesh.py ile ikili bicime cevrilip EBOOT'a gomulur. Vertexler
+ * her karede ucagin konum ve yonelimine gore donusturulur. Inis takimi ayri
+ * parcalar oldugu icin takim kapaliyken cizilmez. */
 
 int  aircraft_init(void);
 void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
@@ -20,5 +20,8 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
 /* Kokpit ve dis kamera icin ucak uzerindeki referans noktalari */
 void aircraft_cockpit_pos(const Flight *f, float out[3]);
 void aircraft_chase_pos(const Flight *f, float out[3]);
+
+/* Modeldeki toplam ucgen sayisi (tani icin) */
+unsigned int aircraft_triangle_count(void);
 
 #endif

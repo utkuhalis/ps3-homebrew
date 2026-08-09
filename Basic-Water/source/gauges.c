@@ -84,48 +84,104 @@ static void draw_value_box(float cx, float cy, const char *value,
     font_draw_center((int)cx, y + h + 6, 1, label, COL_LABEL);
 }
 
-/* Suni ufuk: gokyuzu/toprak ayrimi ucagin yatisina ve burun acisina gore
- * doner ve kayar. Daire maskesi yerine yuvarlatilmis kare cerceve kullanildi;
- * daire icine dondurulmus dolgu kirpmak fragment tarafinda ek is demek. */
-static void draw_attitude(float cx, float cy, float r, float pitch, float roll)
+/* Bir noktanin ufuk cizgisine gore isaretli uzakligi.
+ *
+ * Ufuk, gosterge merkezinden `shift` kadar kaymis ve `roll` kadar donmus bir
+ * dogrudur. m = (sin roll, -cos roll) bu dogrunun "yukari" normalidir; roll=0
+ * iken m ekranda yukariyi gosterir (ekran y'si asagi pozitif).
+ *
+ * d > 0  -> gokyuzu tarafi,  d < 0 -> toprak tarafi.
+ * Saf fonksiyon: birim testli. */
+float gauge_horizon_dist(float dx, float dy, float roll, float shift)
 {
-    float shift = clampf(pitch / (PI * 0.5f), -1.0f, 1.0f) * r * 0.9f;
-    float ca = cosf(roll), sa = sinf(roll);
-    int i;
+    return dx * sinf(roll) - dy * cosf(roll) - shift;
+}
 
-    /* Gokyuzu ve toprak dolgusu. Dondurulmus dikdortgenler daire icine
-     * kirpilamadigi icin gosterge kare cerceveli: dolgu gosterge alanini
-     * asmasin diye olculer cerceveye gore secildi. */
-    overlay_rot_rect(cx + sa * (shift - r * 0.62f), cy - ca * (shift - r * 0.62f),
-                     r * 1.72f, r * 1.30f, -roll, COL_SKY, 240);
-    overlay_rot_rect(cx + sa * (shift + r * 0.62f), cy - ca * (shift + r * 0.62f),
-                     r * 1.72f, r * 1.30f, -roll, COL_GROUND, 240);
+/* Burun acisindan ufkun gosterge icindeki kaymasi.
+ * Burun yukari (pitch > 0) iken ufuk ekranda ASAGI iner, bu yuzden isaret
+ * terstir. Onceki surumde bu isaret ters oldugu icin toprak ustte,
+ * gokyuzu altta cikiyordu. */
+float gauge_horizon_shift(float pitch, float r)
+{
+    return -clampf(pitch / (PI * 0.5f), -1.0f, 1.0f) * r * 0.9f;
+}
 
-    /* ufuk cizgisi */
-    overlay_rot_rect(cx + sa * shift, cy - ca * shift,
-                     r * 2.2f, 2.0f, -roll, COL_TICK, 245);
+/* Suni ufuk: gokyuzu/toprak ayrimi ucagin yatisina ve burun acisina gore
+ * doner ve kayar.
+ *
+ * Dolgu, dondurulmus dikdortgenlerle degil satir taramasiyla ciziliyor:
+ * her yatay satir icin once dairenin genisligi, sonra ufkun o satiri nerede
+ * kestigi hesaplanip parcalar ayri ayri dolduruluyor. Dondurulmus dikdortgen
+ * daire icine kirpilamadigi icin onceki surumde dolgu gostergenin disina
+ * tasiyordu; bu yontemde tasma matematiksel olarak imkansiz. */
+void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll)
+{
+    float shift = gauge_horizon_shift(pitch, r);
+    float sa = sinf(roll);
+    float inner = r - 3.0f;         /* cerceve kalinligi kadar iceride */
+    int i, iy;
 
-    /* derece merdiveni */
-    for (i = -2; i <= 2; i++) {
-        float off = shift + i * r * 0.24f;
-        float len = (i % 2 == 0) ? r * 0.44f : r * 0.24f;
+    for (iy = -(int)inner; iy <= (int)inner; iy++) {
+        float dy = (float)iy;
+        float hw = sqrtf(inner * inner - dy * dy);
+        int y = (int)(cy + dy);
+        int xl = (int)(cx - hw);
+        int w = (int)(hw * 2.0f);
+        float xc;
 
-        if (i == 0)
+        if (w <= 0)
             continue;
-        overlay_rot_rect(cx + sa * off, cy - ca * off, len, 1.5f, -roll,
-                         COL_TICK, 170);
+
+        /* Yatis yokken satirin tamami tek renk: kesisim yok. */
+        if (sa > -0.02f && sa < 0.02f) {
+            float d = gauge_horizon_dist(0.0f, dy, roll, shift);
+
+            overlay_fill_rect(xl, y, w, 1, d > 0.0f ? COL_SKY : COL_GROUND);
+            continue;
+        }
+
+        /* d(x) = (x-cx)*sa - dy*ca - shift = 0  ->  kesisim noktasi */
+        xc = cx + (dy * cosf(roll) + shift) / sa;
+
+        if (xc <= (float)xl) {
+            /* satirin tamami kesisimin sagi */
+            overlay_fill_rect(xl, y, w, 1, sa > 0.0f ? COL_SKY : COL_GROUND);
+        } else if (xc >= (float)(xl + w)) {
+            overlay_fill_rect(xl, y, w, 1, sa > 0.0f ? COL_GROUND : COL_SKY);
+        } else {
+            int lw = (int)(xc - xl);
+
+            overlay_fill_rect(xl, y, lw, 1,
+                              sa > 0.0f ? COL_GROUND : COL_SKY);
+            overlay_fill_rect(xl + lw, y, w - lw, 1,
+                              sa > 0.0f ? COL_SKY : COL_GROUND);
+        }
     }
 
-    /* kare cerceve (daire yerine) */
+    /* ufuk cizgisi ve derece merdiveni: daire icinde kalacak kadar kisa */
     {
-        int bx = (int)(cx - r * 0.88f), by = (int)(cy - r * 0.88f);
-        int bw = (int)(r * 1.76f), bh = (int)(r * 1.76f);
+        float ca = cosf(roll);
 
-        overlay_fill_rect(bx, by, bw, 2, COL_RIM);
-        overlay_fill_rect(bx, by + bh - 2, bw, 2, COL_RIM);
-        overlay_fill_rect(bx, by, 2, bh, COL_RIM);
-        overlay_fill_rect(bx + bw - 2, by, 2, bh, COL_RIM);
+        overlay_rot_rect(cx + sa * shift, cy - ca * shift,
+                         inner * 1.9f, 2.0f, -roll, COL_TICK, 245);
+
+        for (i = -2; i <= 2; i++) {
+            float off = shift + i * r * 0.22f;
+            float len = (i % 2 == 0) ? r * 0.40f : r * 0.22f;
+
+            if (i == 0)
+                continue;
+            if (off > inner * 0.8f || off < -inner * 0.8f)
+                continue;       /* gostergenin disina cikacak merdiven cizilmez */
+            overlay_rot_rect(cx + sa * off, cy - ca * off, len, 1.5f, -roll,
+                             COL_TICK, 170);
+        }
     }
+
+    /* daire cerceve */
+    overlay_ring(cx, cy, r, 3.0f, COL_RIM, 235);
+
+    /* sabit ucak sembolu */
     overlay_fill_rect((int)(cx - 22), (int)(cy - 1), 16, 3, COL_NEEDLE);
     overlay_fill_rect((int)(cx + 6), (int)(cy - 1), 16, 3, COL_NEEDLE);
     overlay_disc(cx, cy, 3.0f, COL_NEEDLE, 250);
@@ -143,16 +199,16 @@ void gauges_draw(float speed_kmh, float altitude_m, float pitch_rad,
     draw_dial(x1, y, r, 8);
     draw_needle(x1, y, r, gauge_speed_angle(speed_kmh));
     snprintf(buf, sizeof(buf), "%d", (int)(speed_kmh + 0.5f));
-    draw_value_box(x1, y + r + 10.0f, buf, "HIZ km/s");
+    draw_value_box(x1, y + r + 10.0f, buf, "SPEED km/h");
 
     /* suni ufuk */
-    draw_attitude(x2, y, r, pitch_rad, roll_rad);
+    gauges_draw_attitude(x2, y, r, pitch_rad, roll_rad);
     snprintf(buf, sizeof(buf), "%d", (int)(pitch_rad * 180.0f / PI));
-    draw_value_box(x2, y + r + 10.0f, buf, "EĞİM");
+    draw_value_box(x2, y + r + 10.0f, buf, "PITCH");
 
     /* yukseklik */
     draw_dial(x3, y, r, 8);
     draw_needle(x3, y, r, gauge_alt_angle(altitude_m));
     snprintf(buf, sizeof(buf), "%d", (int)(altitude_m + 0.5f));
-    draw_value_box(x3, y + r + 10.0f, buf, "YÜKSEKLİK m");
+    draw_value_box(x3, y + r + 10.0f, buf, "ALTITUDE m");
 }

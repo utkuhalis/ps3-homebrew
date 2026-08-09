@@ -21,7 +21,9 @@
  * mini harita ve menu ayni anda cizildiginde 1600 sinir yetmiyordu ve en son
  * cizilen (menu) sessizce dusuyordu. Sinir bellek acisindan ucuz: 5000
  * dortgen = 20000 vertex, 16-bit indeks sinirinin (65536) altinda. */
-#define MAX_RECTS   5000
+/* Font artik glif basina ~3 kat dikdortgen uretiyor (scale2x) ve suni ufuk
+ * satir taramasiyla ciziliyor; butce buna gore buyutuldu. */
+#define MAX_RECTS   14000
 #define MAX_VERTS   (MAX_RECTS * 4)
 #define MAX_INDICES (MAX_RECTS * 6)
 
