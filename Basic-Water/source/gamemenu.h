@@ -26,6 +26,7 @@ typedef enum {
     ROW_WEATHER = 0,
     ROW_TIME,
     ROW_HUD,
+    ROW_PROFILER,
     ROW_QUIT,
     ROW_COUNT
 } MenuRow;
@@ -36,6 +37,7 @@ typedef struct {
     Weather   weather;
     TimeOfDay time;
     int       hud_visible;
+    int       show_profiler;
     int       quit_requested;
 } GameMenu;
 

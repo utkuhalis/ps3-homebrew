@@ -23,6 +23,19 @@ typedef enum {
 
 const char *flightcam_name(CamMode m);
 
+/* Yorunge kamerasi: ucagin etrafinda donmek icin.
+ *
+ * Takip ve kuyruk modlarinda sag analog kamerayi ucagin cevresinde dondurur,
+ * boylece ucagin buyuklugu ve bicimi gorulebilir. Acilar kalicidir - birakinca
+ * geri sifirlanmaz; SELECT ile menuye girip cikmak da bozmaz. */
+void flightcam_orbit(float dyaw, float dpitch, float dzoom, float dt);
+
+/* Yorunge acilarini varsayilana dondurur (kamera modu degisiminde) */
+void flightcam_orbit_reset(void);
+
+/* HUD'da gostermek icin: yorunge acilari varsayilandan sapmis mi */
+int  flightcam_orbit_active(void);
+
 /* Ucus moduna gore kamerayi gunceller. dt yumusak takip icin gerekli. */
 void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt);
 

@@ -68,8 +68,49 @@ static void aim_point(const Flight *f, float out[3])
 
     local[0] = 0.0f;
     local[1] = 0.6f;
-    local[2] = -4.0f;           /* burun yonu -Z */
+    local[2] = -1.2f;           /* govde merkezine yakin: yorungede donerken
+                                 * ucak kadrajin ortasinda kalir */
     mount_point(f, local, out);
+}
+
+/* --- yorunge (orbit) durumu ---
+ * Kamera, ucagin cevresinde kuresel koordinatlarla konumlanir. */
+#define ORBIT_PITCH_MIN  (-0.35f)
+#define ORBIT_PITCH_MAX   ( 1.15f)
+#define ORBIT_DIST_MIN     6.0f
+#define ORBIT_DIST_MAX    70.0f
+
+static float orbit_yaw = 0.0f;      /* 0 = tam arkadan */
+static float orbit_pitch = 0.22f;   /* + yukaridan bakar */
+static float orbit_dist = 16.0f;
+
+void flightcam_orbit(float dyaw, float dpitch, float dzoom, float dt)
+{
+    orbit_yaw += dyaw * 1.9f * dt;
+    orbit_pitch += dpitch * 1.2f * dt;
+    orbit_dist += dzoom * 22.0f * dt;
+
+    while (orbit_yaw >  3.14159265f) orbit_yaw -= 6.28318531f;
+    while (orbit_yaw < -3.14159265f) orbit_yaw += 6.28318531f;
+
+    if (orbit_pitch < ORBIT_PITCH_MIN) orbit_pitch = ORBIT_PITCH_MIN;
+    if (orbit_pitch > ORBIT_PITCH_MAX) orbit_pitch = ORBIT_PITCH_MAX;
+    if (orbit_dist < ORBIT_DIST_MIN) orbit_dist = ORBIT_DIST_MIN;
+    if (orbit_dist > ORBIT_DIST_MAX) orbit_dist = ORBIT_DIST_MAX;
+}
+
+void flightcam_orbit_reset(void)
+{
+    orbit_yaw = 0.0f;
+    orbit_pitch = 0.22f;
+    orbit_dist = 16.0f;
+}
+
+int flightcam_orbit_active(void)
+{
+    float a = orbit_yaw < 0.0f ? -orbit_yaw : orbit_yaw;
+
+    return (a > 0.05f);
 }
 
 /* Her mod icin ucak govdesine gore kamera yerlesimi (x sag, y yukari,
@@ -88,7 +129,14 @@ static void mount_local(CamMode mode, float out[3])
         break;
     case CAM_CHASE:
     default:
-        out[0] = 0.0f;  out[1] = 2.8f; out[2] = 11.5f;
+        /* Kuresel koordinat: yorunge acilari ve mesafe */
+        {
+            float cp = cosf(orbit_pitch);
+
+            out[0] = sinf(orbit_yaw) * cp * orbit_dist;
+            out[1] = sinf(orbit_pitch) * orbit_dist + 1.2f;
+            out[2] = cosf(orbit_yaw) * cp * orbit_dist;
+        }
         break;
     }
 }

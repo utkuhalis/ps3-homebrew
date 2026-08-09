@@ -55,6 +55,32 @@ runways, weather and a full instrument panel.
 - 7 test suites covering flight physics, camera, autopilot, atmosphere,
   menus, mesh loading and math.
 
+## Status and direction
+
+Basic Water is early and honest about it. The 3D model is a donated asset with
+approximated control surfaces, the flight dynamics are a simplification, some
+instruments are wrong or missing, collision is two special cases, there are no
+textures or shadows, and animations and audio are minimal. These are tracked
+one by one in the [issue list](../../issues) — see the
+[roadmap](../../issues/2) for the whole picture.
+
+All of it gets fixed over time. The goal is a flight simulator that genuinely
+feels like flying: **airliners and fighter jets**, eventually **playable online
+on CFW consoles**.
+
+**Help is welcome, in any form** — code, 3D models, sound recordings, testing on
+real hardware, or simply telling us what feels wrong when you fly it. The whole
+toolchain lives in Docker, so contributing needs no SDK on your machine:
+`./build.sh` and you have a `.pkg`.
+
+Assets that would help right now:
+
+- **Aircraft models** (`.glb` / `.obj`, 20k–60k triangles, metres, nose along
+  −Z) with control surfaces as separately named objects — see
+  [#3](../../issues/3)
+- **Sound recordings** (48 kHz 16-bit WAV, loopable 2–6 s) — see
+  [#8](../../issues/8)
+
 ## Building
 
 Both projects build with a single command. Docker is the only requirement.

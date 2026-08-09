@@ -30,6 +30,9 @@ void hud_draw(const Hud *h, const Camera *cam);
 /* Gaz, flap, spoiler ve inis takimi durumu */
 void hud_draw_controls(const Flight *f);
 
+/* Olcum paneli: kare suresi bolum bolum */
+void hud_draw_profiler(void);
+
 /* Gaz kolu (fiziksel kol gorunumu) */
 void hud_draw_throttle_lever(const Flight *f, const Autopilot *ap);
 

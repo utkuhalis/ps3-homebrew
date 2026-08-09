@@ -5,7 +5,7 @@
 #define PANEL_X   360
 #define PANEL_Y   180
 #define PANEL_W   560
-#define PANEL_H   320
+#define PANEL_H   360
 
 #define COL_PANEL   RGB(6, 14, 26)
 #define COL_BORDER  RGB(120, 190, 255)
@@ -15,7 +15,7 @@
 #define COL_HINT    RGB(120, 140, 160)
 
 static const char *ROW_LABEL[ROW_COUNT] = {
-    "Weather", "Time", "HUD", "Quit"
+    "Weather", "Time", "HUD", "Profiler", "Quit"
 };
 
 const char *weather_name(Weather w)
@@ -88,6 +88,9 @@ void gamemenu_adjust(GameMenu *m, int dir)
     case ROW_HUD:
         m->hud_visible = !m->hud_visible;
         break;
+    case ROW_PROFILER:
+        m->show_profiler = !m->show_profiler;
+        break;
     default:
         break;              /* Cikis satirinda deger yok */
     }
@@ -107,6 +110,7 @@ static const char *row_value(const GameMenu *m, int row)
     case ROW_WEATHER: return weather_name(m->weather);
     case ROW_TIME:    return time_name(m->time);
     case ROW_HUD:     return m->hud_visible ? "On" : "Off";
+    case ROW_PROFILER: return m->show_profiler ? "On" : "Off";
     default:          return "";
     }
 }

@@ -18,6 +18,9 @@ void  rsx3d_end_frame(void);
 float rsx3d_aspect(void);
 gcmContextData *rsx3d_context(void);
 
+/* Kati geometri icin arka yuz elemesi (ucak, pist) */
+void rsx3d_set_culling(int enable);
+
 /* Ekran olculeri (2D bindirmenin olcekleme icin ihtiyaci var) */
 u32  rsx3d_width(void);
 u32  rsx3d_height(void);

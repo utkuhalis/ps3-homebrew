@@ -143,8 +143,14 @@ static void set_draw_env(void)
     rsxSetShadeModel(context, GCM_SHADE_MODEL_SMOOTH);
 
     /* Deniz duzlemi tek yuzlu degil - iki taraftan da gorunsun */
+    /* Arka yuz eleme varsayilan olarak kapali: su ve gokyuzu tek yuzlu
+     * yuzeyler. Kati gecmeler (ucak, pist) bunu kendileri acar. */
     rsxSetCullFaceEnable(context, GCM_FALSE);
-    rsxSetFrontFace(context, GCM_FRONTFACE_CCW);
+
+    /* Viewport Y'yi cevirdigi icin (scale[1] negatif) model uzayinda saat
+     * yonunun TERSI olan yuzler ekranda saat yonunde gorunur. Modelin dis
+     * yuzeyleri CCW oldugundan, ekranda on yuz CW'dir. */
+    rsxSetFrontFace(context, GCM_FRONTFACE_CW);
 
     /* Derinlik kirpma kontrolu ve viewport kirpma dikdortgenleri.
      * Bunlar ayarlanmazsa RSX geometriyi tamamen kirpabilir. */
@@ -255,6 +261,19 @@ void rsx3d_end_frame(void)
 float rsx3d_aspect(void)
 {
     return (float)scr_w / (float)scr_h;
+}
+
+/* Kati geometri icin arka yuz elemesi. 60 bin ucgenlik ucak modelinde
+ * ucgenlerin %49'u kameradan uzaga bakiyor; bunlari rasterlemeye hic
+ * sokmamak neredeyse yarim kare kazandirir. */
+void rsx3d_set_culling(int enable)
+{
+    if (enable) {
+        rsxSetCullFace(context, GCM_CULL_BACK);
+        rsxSetCullFaceEnable(context, GCM_TRUE);
+    } else {
+        rsxSetCullFaceEnable(context, GCM_FALSE);
+    }
 }
 
 gcmContextData *rsx3d_context(void)

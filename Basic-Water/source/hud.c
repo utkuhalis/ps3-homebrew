@@ -3,6 +3,7 @@
 
 #include "hud.h"
 #include "autopilot.h"
+#include "profiler.h"
 #include "overlay.h"
 #include "font.h"
 
@@ -57,6 +58,51 @@ void hud_draw(const Hud *h, const Camera *cam)
     while (heading >= 360.0f) heading -= 360.0f;
     snprintf(buf, sizeof(buf), "%d deg", (int)(heading + 0.5f));
     row(94, "HEADING", buf, COL_VALUE);
+}
+
+/* Olcum paneli: kare suresinin nereye gittigini bolum bolum gosterir.
+ *
+ * FLIP buyukse darbogaz GPU'dadir (CPU, RSX'in kareyi bitirmesini bekliyor);
+ * digerleri buyukse is CPU tarafindadir. Bu ayrim olmadan neyi
+ * iyilestirdigimizi bilemeyiz. */
+void hud_draw_profiler(void)
+{
+    int x = 940, y = 60, w = 320, h = 190;
+    int i;
+    char buf[64];
+    float total = prof_frame_us();
+    color_t label = RGB(150, 165, 185);
+    color_t value = RGB(230, 240, 252);
+
+    overlay_blend_rect(x, y, w, h, RGB(6, 10, 18), 205);
+    overlay_fill_rect(x, y, w, 2, RGB(120, 190, 255));
+
+    snprintf(buf, sizeof(buf), "%.1f ms   %.0f fps",
+             total / 1000.0f, prof_fps());
+    font_draw_text(x + 10, y + 10, 2, buf, RGB(140, 235, 170));
+
+    for (i = 0; i < PROF_COUNT; i++) {
+        float us = prof_avg_us((ProfSection)i);
+        int ry = y + 40 + i * 17;
+        int bar;
+
+        font_draw_text(x + 10, ry, 1, prof_name((ProfSection)i), label);
+
+        snprintf(buf, sizeof(buf), "%5.2f", us / 1000.0f);
+        font_draw_text(x + 70, ry, 1, buf, value);
+
+        /* oransal cubuk: kare suresinin yuzdesi */
+        bar = (total > 1.0f) ? (int)(us / total * 180.0f) : 0;
+        if (bar > 180)
+            bar = 180;
+        overlay_fill_rect(x + 120, ry + 1, bar, 6,
+                          (i == PROF_FLIP) ? RGB(230, 170, 70)
+                                           : RGB(90, 170, 240));
+    }
+
+    snprintf(buf, sizeof(buf), "tri %u   rect %u",
+             prof_triangles(), prof_rects());
+    font_draw_text(x + 10, y + h - 20, 1, buf, label);
 }
 
 /* Gaz kolu: yandan gorunen fiziksel bir kol.

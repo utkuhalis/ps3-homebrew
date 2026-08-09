@@ -24,4 +24,7 @@ void aircraft_chase_pos(const Flight *f, float out[3]);
 /* Modeldeki toplam ucgen sayisi (tani icin) */
 unsigned int aircraft_triangle_count(void);
 
+/* O karede gercekten cizilen ucgen sayisi (LOD sonrasi) */
+unsigned int aircraft_drawn_triangles(void);
+
 #endif

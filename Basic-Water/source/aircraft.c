@@ -8,6 +8,7 @@
 #include "aircraft.h"
 #include "rsx3d.h"
 #include "mesh.h"
+#include "profiler.h"
 
 #include "solid_vpo.h"
 #include "solid_fpo.h"
@@ -90,6 +91,11 @@ static u16       *idx = NULL;
 static u32        part_vtx_base[MESH_MAX_PARTS];
 static u32        part_idx_base[MESH_MAX_PARTS];
 static int        body_part = -1;
+static float      cam_dist2 = 0.0f;
+static unsigned int drawn_tris = 0;
+
+/* Bu mesafenin otesinde yalnizca govde cizilir (birim kare) */
+#define LOD_SMALL_PARTS_DIST2  (170.0f * 170.0f)
 static int        loaded = 0;
 
 static rsxVertexProgram   *vp = (rsxVertexProgram *)solid_vpo;
@@ -206,8 +212,14 @@ int aircraft_init(void)
     return 0;
 }
 
-/* Modeli ucagin konum ve yonelimine tasir, isigi vertex basina hesaplar. */
-static void build_model(const Flight *f, const Atmosphere *atm)
+/* Modeli ucagin konum ve yonelimine tasir, isigi vertex basina hesaplar.
+ *
+ * Aydinlatma tamamen burada yapiliyor: shader renk olarak yalnizca hazir
+ * degeri aliyor (vertex formatinda normal tasinmiyor). Difuz terime ek olarak
+ * Blinn-Phong yansima hesaplaniyor - govdenin metalik parlamasi bundan
+ * geliyor; onceden yalnizca duz Lambert vardi ve ucak mat plastik gibiydi. */
+static void build_model(const Flight *f, const Atmosphere *atm,
+                        const float eye[3])
 {
     float rot[3][3];
     int p;
@@ -278,11 +290,43 @@ static void build_model(const Flight *f, const Atmosphere *atm)
             dst[v].x = wp[0];
             dst[v].y = wp[1];
             dst[v].z = wp[2];
-            dst[v].r = src[6];
-            dst[v].g = src[7];
-            dst[v].b = src[8];
-            /* ortam isigi + yonlu isik; gece atmosferde sun_color soner */
-            dst[v].bright = 0.42f + 0.58f * d;
+
+            {
+                /* yansima: yarim vektor (goz + gunes) ile normal arasi aci */
+                float vx = eye[0] - wp[0];
+                float vy = eye[1] - wp[1];
+                float vz = eye[2] - wp[2];
+                float vl = sqrtf(vx * vx + vy * vy + vz * vz);
+                float spec = 0.0f;
+                float lit = 0.42f + 0.58f * d;
+
+                if (vl > 0.001f) {
+                    float hx = atm->sun_dir[0] + vx / vl;
+                    float hy = atm->sun_dir[1] + vy / vl;
+                    float hz = atm->sun_dir[2] + vz / vl;
+                    float hl = sqrtf(hx * hx + hy * hy + hz * hz);
+
+                    if (hl > 0.001f) {
+                        float nh = (wn[0] * hx + wn[1] * hy + wn[2] * hz) / hl;
+
+                        if (nh > 0.0f) {
+                            float s = nh * nh;    /* ^2 */
+
+                            s = s * s;            /* ^4 */
+                            s = s * s;            /* ^8 */
+                            s = s * s;            /* ^16 */
+                            s = s * s;            /* ^32 */
+                            spec = s * 0.55f * d;
+                        }
+                    }
+                }
+
+                dst[v].r = src[6] * lit + spec;
+                dst[v].g = src[7] * lit + spec;
+                dst[v].b = src[8] * lit + spec;
+            }
+
+            dst[v].bright = 1.0f;   /* aydinlatma zaten renge islendi */
             dst[v].pad = 0.0f;
         }
     }
@@ -302,7 +346,21 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
     if (!loaded)
         return;
 
-    build_model(f, atm);
+    drawn_tris = 0;
+    prof_begin(PROF_MODEL);
+    build_model(f, atm, cam->pos);
+    prof_end(PROF_MODEL);
+
+    /* Detay seviyesi: uzaktan bakildiginda kucuk parcalar (tekerlekler,
+     * kumanda yuzeyleri) birkac pikseli gecmez. Onlari cizmemek 22 bin
+     * ucgen kazandirir ve gorunurde hicbir sey degismez. */
+    {
+        float dx = cam->pos[0] - f->pos[0];
+        float dy = cam->pos[1] - f->pos[1];
+        float dz = cam->pos[2] - f->pos[2];
+
+        cam_dist2 = dx * dx + dy * dy + dz * dz;
+    }
 
     for (k = 0; k < 3; k++) {
         eye[k] = cam->pos[k];
@@ -318,6 +376,7 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
     if (c_fog) rsxSetFragmentProgramParameter(ctx, fp, c_fog, &fog, fp_off, GCM_LOCATION_RSX);
 
     rsxLoadFragmentProgramLocation(ctx, fp, fp_off, GCM_LOCATION_RSX);
+    rsx3d_set_culling(1);
 
     rsxSetUserClipPlaneControl(ctx,
                                GCM_USER_CLIP_PLANE_DISABLE,
@@ -331,7 +390,12 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
         AcVertex *base = &verts[part_vtx_base[p]];
 
         /* inis takimi kapaliyken govde disindaki parcalar cizilmez */
-        if (p != body_part && f->gear_pos < 0.02f)
+        if (p != body_part && part_info[p].kind == SURF_NONE
+            && f->gear_pos < 0.02f)
+            continue;
+
+        /* uzaktan bakildiginda kucuk parcalar atlanir (LOD) */
+        if (p != body_part && cam_dist2 > LOD_SMALL_PARTS_DIST2)
             continue;
 
         rsxAddressToOffset(&base[0].x, &off);
@@ -353,10 +417,18 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
         rsxDrawIndexArray(ctx, GCM_TYPE_TRIANGLES, off,
                           model.part[p].index_count,
                           GCM_INDEX_TYPE_16B, GCM_LOCATION_RSX);
+        drawn_tris += model.part[p].index_count / 3;
     }
+
+    rsx3d_set_culling(0);
 }
 
 unsigned int aircraft_triangle_count(void)
 {
     return loaded ? mesh_triangles(&model) : 0;
+}
+
+unsigned int aircraft_drawn_triangles(void)
+{
+    return drawn_tris;
 }

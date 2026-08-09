@@ -27,10 +27,14 @@
 #include "ps3log.h"
 #include "audio.h"
 #include "autopilot.h"
+#include "profiler.h"
 
 SYS_PROCESS_PARAM(1001, 0x100000)
 
-#define FOV_DEG   60.0f
+/* Dar gorus acisi (telefoto) nesneleri buyutur ve mesafeleri sikistirir;
+ * ucagin ve denizin olcegi bu sayede hissediliyor. 60 derece her seyi
+ * uzaklastirip oyuncak gibi gosteriyordu. */
+#define FOV_DEG   46.0f
 #define Z_NEAR     1.0f
 #define Z_FAR   6000.0f
 #define DT        (1.0f / 60.0f)
@@ -137,6 +141,7 @@ int main(int argc, const char *argv[])
     while (!should_exit) {
         float forward, strafe, updown, yaw_in, pitch_in;
 
+        prof_frame_begin();
         sysUtilCheckCallback();
         input_update();
 
@@ -231,9 +236,26 @@ int main(int argc, const char *argv[])
             if (input_pressed(0, PAD_CROSS))
                 plane.gear_down = !plane.gear_down;
 
-            /* YUVARLAK: kamera modu (takip / kokpit / serbest) */
-            if (input_pressed(0, PAD_CIRCLE))
+            /* YUVARLAK: kamera modu (takip / kokpit / kanatlar / kuyruk / serbest) */
+            if (input_pressed(0, PAD_CIRCLE)) {
                 cam_mode = (CamMode)((cam_mode + 1) % CAM_MODE_COUNT);
+                flightcam_orbit_reset();
+            }
+
+            /* Sag analog: takip modunda ucagin cevresinde don.
+             * Kokpit ve serbest modda kendi islevini korur. */
+            if (cam_mode == CAM_CHASE) {
+                float ox = input_axis_right_x();
+                float oy = input_axis_right_y();
+                /* Yakinlasma L3'te: yon tuslari zaten burun kumandasinin
+                 * yedegi, ikisini ayni tusa baglamak catisirdi. */
+                float zoom = input_held(0, PAD_L3) ? -1.0f : 0.0f;
+
+                if (input_held(0, PAD_L3) && input_held(0, PAD_TRIANGLE))
+                    zoom = 1.0f;
+
+                flightcam_orbit(ox, oy, zoom, DT);
+            }
         } else {
             plane.in_pitch = plane.in_roll = plane.in_yaw = 0.0f;
         }
@@ -243,6 +265,7 @@ int main(int argc, const char *argv[])
 
         /* Otopilot kumanda girdilerini oyuncunun yerine uretir; fizik
          * degismez, ucak ayni modele tabidir. */
+        prof_begin(PROF_FLIGHT);
         autopilot_update(&ap, &plane, DT);
 
         flight_update(&plane, DT);
@@ -255,6 +278,7 @@ int main(int argc, const char *argv[])
         hud_update(&hud, &plane, DT);
         audio_update(&plane, &atm);
         objectives_update(&objs, &cam, flight_speed_kmh(&plane));
+        prof_end(PROF_FLIGHT);
 
         time_sec = (float)(frames++) / 60.0f;
 
@@ -267,15 +291,24 @@ int main(int argc, const char *argv[])
             ps3log("120 kare tamamlandi, sahne akiyor");
 
         rsx3d_begin_frame(SKY_CLEAR_COLOR);
+
+        prof_begin(PROF_SCENE);
         scene_draw(&cam, &proj, time_sec, &atm);
+        prof_end(PROF_SCENE);
+
+        prof_begin(PROF_RUNWAY);
         runway_draw(&cam, &proj, &atm);
+        prof_end(PROF_RUNWAY);
 
         /* kokpit gorusunde kendi ucagimizi cizmiyoruz */
+        prof_begin(PROF_AIRCRAFT);
         if (cam_mode != CAM_COCKPIT)
             aircraft_draw(&plane, &cam, &proj, &atm);
+        prof_end(PROF_AIRCRAFT);
 
         /* 2D bindirme: dikdortgenler toplanir, sahnenin ustune tek
          * cizim cagrisiyla gonderilir */
+        prof_begin(PROF_OVERLAY);
         overlay_begin();
         weatherfx_draw(&atm, time_sec);
         if (menu.hud_visible) {
@@ -293,9 +326,32 @@ int main(int argc, const char *argv[])
             waypoint_draw_all(&cam, &proj);
         }
         gamemenu_draw(&menu);
+        if (menu.show_profiler)
+            hud_draw_profiler();
+        prof_set_counts(aircraft_drawn_triangles(), overlay_rect_count());
         overlay_flush();
+        prof_end(PROF_OVERLAY);
 
+        prof_begin(PROF_FLIP);
         rsx3d_end_frame();
+        prof_end(PROF_FLIP);
+        prof_frame_end();
+
+        /* Olcumu periyodik olarak kayda da yaz: gercek PS3'te ekrani
+         * okumak zor, kayit FTP ile alinabiliyor. */
+        if (frames % 600 == 0 && frames > 0)
+            ps3log("kare %.2f ms (%.0f fps) | flight %.2f model %.2f "
+                   "scene %.2f runway %.2f plane %.2f hud %.2f flip %.2f "
+                   "| ucgen %u rect %u",
+                   prof_frame_us() / 1000.0f, prof_fps(),
+                   prof_avg_us(PROF_FLIGHT) / 1000.0f,
+                   prof_avg_us(PROF_MODEL) / 1000.0f,
+                   prof_avg_us(PROF_SCENE) / 1000.0f,
+                   prof_avg_us(PROF_RUNWAY) / 1000.0f,
+                   prof_avg_us(PROF_AIRCRAFT) / 1000.0f,
+                   prof_avg_us(PROF_OVERLAY) / 1000.0f,
+                   prof_avg_us(PROF_FLIP) / 1000.0f,
+                   prof_triangles(), prof_rects());
     }
 
     audio_exit();

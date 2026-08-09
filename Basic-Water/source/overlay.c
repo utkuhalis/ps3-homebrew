@@ -90,6 +90,11 @@ void overlay_begin(void)
     overflow = 0;
 }
 
+unsigned int overlay_rect_count(void)
+{
+    return (unsigned int)rect_count;
+}
+
 int overlay_overflowed(void)
 {
     return overflow;

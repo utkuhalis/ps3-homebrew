@@ -22,6 +22,9 @@ void overlay_begin(void);
  * 3D sahne cizildikten sonra, kare sonunda cagrilir. */
 void overlay_flush(void);
 
+/* O karede toplanan dikdortgen sayisi (olcum icin) */
+unsigned int overlay_rect_count(void);
+
 /* Kare icinde cizim tamponu doldu mu (tani icin) */
 int  overlay_overflowed(void);
 
