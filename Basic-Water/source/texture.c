@@ -6,6 +6,7 @@
 
 #include "texture.h"
 #include "rsx3d.h"
+#include "ps3log.h"
 
 #include "textures_bin.h"
 
@@ -96,8 +97,12 @@ int texture_init(void)
             return -6;
 
         memset(&entries[i].tex, 0, sizeof(gcmTexture));
+        /* NRM: doku koordinatlari 0..1 araliginda normalize gelir.
+         * Bu bayrak olmadan RSX koordinatlari piksel cinsinden bekler ve
+         * bizim 0..1'lik UV'lerimiz hep ayni tek pikseli ornekler. */
         entries[i].tex.format    = GCM_TEXTURE_FORMAT_A8R8G8B8
-                                   | GCM_TEXTURE_FORMAT_LIN;
+                                   | GCM_TEXTURE_FORMAT_LIN
+                                   | GCM_TEXTURE_FORMAT_NRM;
         entries[i].tex.mipmap    = (u8)mips;
         entries[i].tex.dimension = GCM_TEXTURE_DIMS_2D;
         entries[i].tex.cubemap   = GCM_FALSE;
@@ -108,6 +113,12 @@ int texture_init(void)
         entries[i].tex.location  = GCM_LOCATION_RSX;
         entries[i].tex.pitch     = w * 4;
         entries[i].tex.offset    = gpu_off;
+
+        /* Verinin gercekten renk tasidigini dogrula: dokular simsiyah
+         * ciktiginda sorunun veride mi baglamada mi oldugunu ayirir. */
+        ps3log("doku %s %ux%u mip=%u ilk pikseller %08X %08X %08X",
+               entries[i].name, w, h, mips,
+               be32(p + off), be32(p + off + 4), be32(p + off + 8));
 
         off += bytes;
         off = (off + 3u) & ~3u;     /* uretici parca sonunu hizaliyor */
@@ -131,24 +142,34 @@ int texture_find(const char *name)
 void texture_bind(int unit, int index)
 {
     gcmContextData *ctx = rsx3d_context();
+    int u;
 
     if (index < 0 || index >= entry_count)
         return;
 
     rsxInvalidateTextureCache(ctx, GCM_INVALIDATE_TEXTURE);
-    rsxLoadTexture(ctx, (u8)unit, &entries[index].tex);
 
-    /* Mip'ler arasi da suzulur (trilinear): pist yuzeyi uzakta titremesin. */
-    rsxTextureControl(ctx, (u8)unit, GCM_TRUE, 0,
-                      (u16)(entries[index].tex.mipmap << 8),
-                      GCM_TEXTURE_MAX_ANISO_4);
-    rsxTextureFilter(ctx, (u8)unit, 0,
-                     GCM_TEXTURE_LINEAR_MIPMAP_LINEAR,
-                     GCM_TEXTURE_LINEAR,
-                     GCM_TEXTURE_CONVOLUTION_QUINCUNX);
-    rsxTextureWrapMode(ctx, (u8)unit,
-                       GCM_TEXTURE_REPEAT, GCM_TEXTURE_REPEAT,
-                       GCM_TEXTURE_REPEAT, 0, GCM_TEXTURE_ZFUNC_NEVER, 0);
+    /* Sampler'in hangi doku birimine dustugunu shader'dan sorabilecegimiz
+     * bir yol yok (rsxFragmentProgramGetAttribIndex librsx'te tanimsiz), bu
+     * yuzden ilk birkac birime ayni doku baglanir. Fazladan baglama ucuz;
+     * yanlis birimi tahmin etmek dokunun hic okunmamasina yol aciyordu. */
+    for (u = 0; u < 4; u++) {
+        rsxLoadTexture(ctx, (u8)u, &entries[index].tex);
+
+        /* minlod/maxlod 12.4 sabit noktali: lod << 8.
+         * En buyuk lod, mip SAYISI degil son mip'in indeksidir. */
+        rsxTextureControl(ctx, (u8)u, GCM_TRUE, 0,
+                          (u16)((entries[index].tex.mipmap - 1) << 8),
+                          GCM_TEXTURE_MAX_ANISO_4);
+        rsxTextureFilter(ctx, (u8)u, 0,
+                         GCM_TEXTURE_LINEAR_MIPMAP_LINEAR,
+                         GCM_TEXTURE_LINEAR,
+                         GCM_TEXTURE_CONVOLUTION_QUINCUNX);
+        rsxTextureWrapMode(ctx, (u8)u,
+                           GCM_TEXTURE_REPEAT, GCM_TEXTURE_REPEAT,
+                           GCM_TEXTURE_REPEAT, 0, GCM_TEXTURE_ZFUNC_NEVER, 0);
+    }
+    (void)unit;
 }
 
 int texture_count(void)

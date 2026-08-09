@@ -344,6 +344,14 @@ int main(int argc, const char *argv[])
 
         /* Olcumu periyodik olarak kayda da yaz: gercek PS3'te ekrani
          * okumak zor, kayit FTP ile alinabiliyor. */
+        /* Teshis: sabit karelerde ekran goruntusu al */
+        if (frames == 240 || frames == 900) {
+            char shot[64];
+
+            snprintf(shot, sizeof(shot), "/dev_hdd0/tmp/shot%lu.ppm", frames);
+            ps3log("ekran goruntusu %s -> %d", shot, rsx3d_capture(shot));
+        }
+
         if (frames % 600 == 0 && frames > 0)
             ps3log("kare %.2f ms (%.0f fps) | flight %.2f model %.2f "
                    "scene %.2f runway %.2f plane %.2f hud %.2f flip %.2f "

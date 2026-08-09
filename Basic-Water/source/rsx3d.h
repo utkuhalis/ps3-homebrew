@@ -18,6 +18,9 @@ void  rsx3d_end_frame(void);
 float rsx3d_aspect(void);
 gcmContextData *rsx3d_context(void);
 
+/* Ekran goruntusunu PPM olarak yazar (teshis) */
+int rsx3d_capture(const char *path);
+
 /* Kati geometri icin arka yuz elemesi (ucak, pist) */
 void rsx3d_set_culling(int enable);
 

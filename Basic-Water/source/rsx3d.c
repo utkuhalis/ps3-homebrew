@@ -9,6 +9,7 @@
 #include <rsx/rsx.h>
 
 #include "rsx3d.h"
+#include "ps3log.h"
 
 #define CB_SIZE     0x100000
 #define HOST_SIZE   (32 * 1024 * 1024)
@@ -285,5 +286,51 @@ gcmContextData *rsx3d_context(void)
 /* GPU sahneyi bitirene kadar bekler; ardindan arka tampona CPU ile yazmak
  * guvenlidir. Beklemeden yazilirsa RSX hala cizerken uzerine yazilir ve
  * HUD titrer. */
+/* Ekran goruntusu: o anki on tamponu PPM olarak diske yazar.
+ *
+ * Gorsel hatalari (siyah doku, ters yuz, kayik UV) emulatore bakmadan
+ * teshis edebilmek icin. RSX'in kareyi bitirmesi beklenir, aksi halde
+ * yarim cizilmis tampon okunur. */
+int rsx3d_capture(const char *path)
+{
+    const Buffer *b = &buffers[cur_buf ^ 1];   /* en son gosterilen tampon */
+    FILE *f;
+    u32 x, y;
+
+    if (b->ptr == NULL)
+        return -1;
+
+    wait_rsx_idle();
+
+    /* Tamponun gercekten dolu olup olmadigini olc: ekran goruntusu simsiyah
+     * ciktiginda yanlis tampon mu okundugunu ayirir. */
+    {
+        u32 mid = (b->height / 2) * b->width + (b->width / 2);
+
+        ps3log("capture buf=%d %ux%u px[0]=%08X px[orta]=%08X diger=%08X",
+               cur_buf ^ 1, b->width, b->height,
+               b->ptr[0], b->ptr[mid], buffers[cur_buf].ptr[mid]);
+    }
+
+    f = fopen(path, "wb");
+    if (f == NULL)
+        return -2;
+
+    fprintf(f, "P6\n%u %u\n255\n", b->width, b->height);
+    for (y = 0; y < b->height; y++) {
+        for (x = 0; x < b->width; x++) {
+            u32 px = b->ptr[y * b->width + x];
+            unsigned char rgb[3];
+
+            rgb[0] = (unsigned char)((px >> 16) & 0xFF);
+            rgb[1] = (unsigned char)((px >> 8) & 0xFF);
+            rgb[2] = (unsigned char)(px & 0xFF);
+            fwrite(rgb, 1, 3, f);
+        }
+    }
+    fclose(f);
+    return 0;
+}
+
 u32 rsx3d_width(void)  { return scr_w; }
 u32 rsx3d_height(void) { return scr_h; }
