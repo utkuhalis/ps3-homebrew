@@ -147,10 +147,11 @@ static void set_draw_env(void)
      * yuzeyler. Kati gecmeler (ucak, pist) bunu kendileri acar. */
     rsxSetCullFaceEnable(context, GCM_FALSE);
 
-    /* Viewport Y'yi cevirdigi icin (scale[1] negatif) model uzayinda saat
-     * yonunun TERSI olan yuzler ekranda saat yonunde gorunur. Modelin dis
-     * yuzeyleri CCW oldugundan, ekranda on yuz CW'dir. */
-    rsxSetFrontFace(context, GCM_FRONTFACE_CW);
+    /* On yuz yonu OLCULDU: kameraya donuk ucgenler ekran uzayinda saat
+     * yonunun tersinde cikiyor (31481 ucgende istisnasiz). Ilk yazimda
+     * viewport'un Y cevirmesinden yola cikip CW demistim - yanlisti ve
+     * sonuc olarak on yuzler atilip ucagin ICI cizildi. */
+    rsxSetFrontFace(context, GCM_FRONTFACE_CCW);
 
     /* Derinlik kirpma kontrolu ve viewport kirpma dikdortgenleri.
      * Bunlar ayarlanmazsa RSX geometriyi tamamen kirpabilir. */

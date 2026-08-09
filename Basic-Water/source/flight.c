@@ -172,6 +172,25 @@ void flight_orientation_matrix(const Flight *f, float m[3][3])
     m[2][2] =  cp * cy;
 }
 
+/* Ucak pist dikdortgeninin uzerinde mi?
+ *
+ * dx,dz pist merkezine gore dunya farki. Once pist yonune gore dondurulup
+ * uzunluk/genislik eksenlerine ayristirilir. Saf fonksiyon: birim testli. */
+int flight_over_runway(const Flight *f, float dx, float dz)
+{
+    float ch = cosf(f->ground_heading);
+    float sh = sinf(f->ground_heading);
+
+    /* pist ekseni boyunca (burun yonu) ve enine bilesenler */
+    float along = dx * sh - dz * ch;
+    float across = dx * ch + dz * sh;
+
+    if (along < 0.0f) along = -along;
+    if (across < 0.0f) across = -across;
+
+    return (along <= f->ground_half_len && across <= f->ground_half_wid);
+}
+
 void flight_init_on_runway(Flight *f, const float runway_xz[2], float heading,
                            float start_offset)
 {
@@ -197,7 +216,9 @@ void flight_init_on_runway(Flight *f, const float runway_xz[2], float heading,
     f->ground_ref[0] = runway_xz[0];
     f->ground_ref[1] = DECK_Y;
     f->ground_ref[2] = runway_xz[1];
-    f->ground_radius = 620.0f;
+    f->ground_heading = heading;
+    f->ground_half_len = RUNWAY_HALF_LEN;
+    f->ground_half_wid = RUNWAY_HALF_WID;
 }
 
 void flight_init(Flight *f, const float start_pos[3], float start_yaw)
@@ -416,7 +437,7 @@ void flight_update(Flight *f, float dt)
         float deck_top = DECK_Y + (f->gear_down ? GEAR_HEIGHT : 0.4f);
         float dx = f->pos[0] - f->ground_ref[0];
         float dz = f->pos[2] - f->ground_ref[2];
-        int over_runway = (dx * dx + dz * dz) < (f->ground_radius * f->ground_radius);
+        int over_runway = flight_over_runway(f, dx, dz);
 
         f->on_ground = 0;
 

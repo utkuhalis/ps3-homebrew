@@ -43,7 +43,13 @@
  * yon degistirmek imkansizdir. */
 #define CONTROL_REF_MS      85.0f
 #define GEAR_DRAG            0.055f
-#define WHEEL_RADIUS_M       0.42f  /* tekerlek yaricapi (donme animasyonu) */ /* acik tekerleklerin surukleme katkisi */
+#define WHEEL_RADIUS_M       0.42f  /* tekerlek yaricapi (donme animasyonu) */
+
+/* Pist yuzeyi olculeri (runway.h ile ayni olmali). Ucus modulu cizim
+ * modulune bagimli olmasin diye burada tekrar tanimlanir; test bu ikisinin
+ * ayni kaldigini dogrular. */
+#define RUNWAY_HALF_LEN    550.0f
+#define RUNWAY_HALF_WID     48.0f /* acik tekerleklerin surukleme katkisi */
 
 /* Kumanda yuzeyi sinirlari (radyan) */
 #define FLAP_MAX_RAD     0.70f      /* ~40 derece */
@@ -82,9 +88,14 @@ typedef struct {
     int   on_ground;            /* pist yuzeyinde mi */
     int   airborne;             /* bir kez havalandi mi (kalkis yapildi) */
 
-    /* yer temasinin gecerli oldugu alan (pist merkezi ve yaricapi) */
-    float ground_ref[3];
-    float ground_radius;
+    /* Yer temasinin gecerli oldugu PIST DIKDORTGENI.
+     * Onceden yaricapi olan bir daire kullaniliyordu; pist 1100x96 birim
+     * oldugu icin ucak pistin yanindaki denize de asfalta iner gibi
+     * konuyordu. */
+    float ground_ref[3];        /* pist merkezi */
+    float ground_heading;       /* pist yonu (radyan) */
+    float ground_half_len;      /* yaridan uzunluk */
+    float ground_half_wid;      /* yaridan genislik */
 } Flight;
 
 /* Havada baslatir (serbest ucus) */
@@ -100,6 +111,9 @@ void  flight_init_on_runway(Flight *f, const float runway_xz[2], float heading,
 float flight_drag_force_full(float airspeed, float aoa, float flap,
                              float spoiler, int gear_down);
 void  flight_update(Flight *f, float dt);
+
+/* Pist dikdortgeni testi (dx,dz pist merkezine gore) */
+int   flight_over_runway(const Flight *f, float dx, float dz);
 
 /* Govde koordinatini dunyaya tasir (model cizimi ve kamera yerlesimi) */
 void  flight_body_to_world(const Flight *f, const float in[3], float out[3]);

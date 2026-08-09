@@ -5,6 +5,7 @@
 #include "overlay.h"
 #include "font.h"
 #include "runway.h"
+#include "flight.h"
 
 #define MAP_X      24
 #define MAP_Y     512
@@ -44,7 +45,7 @@ static void world_to_map(float wx, float wz, float *mx, float *my)
     *my = MAP_Y + HEAD_H + 8.0f + v * (MAP_H - HEAD_H - 16.0f);
 }
 
-void minimap_draw(const Camera *cam)
+void minimap_draw(const Flight *f)
 {
     float sx, sy, ex, ey, px, py;
     float dx, dy, len, ang;
@@ -63,7 +64,7 @@ void minimap_draw(const Camera *cam)
 
     world_to_map(START_POS[0], START_POS[1], &sx, &sy);
     world_to_map(END_POS[0], END_POS[1], &ex, &ey);
-    world_to_map(cam->pos[0], cam->pos[2], &px, &py);
+    world_to_map(f->pos[0], f->pos[2], &px, &py);
 
     /* rota: kisa parcalarla cizilen kesikli cizgi */
     dx = ex - sx;
@@ -83,14 +84,32 @@ void minimap_draw(const Camera *cam)
     overlay_disc(sx, sy, 4.5f, COL_START, 240);
     overlay_disc(ex, ey, 4.5f, COL_END, 240);
 
-    /* ucak: bakis yonune donmus ucgen yerine kisa bir ok */
-    ang = cam->yaw;
-    overlay_rot_rect(px, py, 14.0f, 3.0f, ang - 1.5708f, COL_PLANE, 250);
-    overlay_rot_rect(px, py, 7.0f, 3.0f, ang, COL_PLANE, 250);
+    /* Ucak isareti: UCAGIN burun yonunu gosterir.
+     *
+     * Onceden KAMERANIN yaw'i kullaniliyordu; yorunge kamerasiyla ucagin
+     * cevresinde donunce harita oku da donuyor ve ucak yan gidiyormus gibi
+     * gorunuyordu.
+     *
+     * Dunya -> harita: X saga, Z asagi. Burun yonu dunyada
+     * (sin yaw, -cos yaw), haritada da ayni bilesenler; ekran acisi
+     * atan2(dy, dx) ile bulunur. */
+    {
+        float hx = sinf(f->yaw);
+        float hy = -cosf(f->yaw);
+
+        ang = atan2f(hy, hx);
+
+        /* govde: burun yonunde uzun cubuk, ucta kucuk bir burun isareti */
+        overlay_rot_rect(px, py, 15.0f, 3.0f, ang, COL_PLANE, 250);
+        overlay_rot_rect(px + hx * 7.0f, py + hy * 7.0f, 5.0f, 5.0f,
+                         ang, COL_PLANE, 250);
+        /* kanatlar: burun yonune dik */
+        overlay_rot_rect(px, py, 11.0f, 2.5f, ang + 1.5708f, COL_PLANE, 220);
+    }
 
     /* kalan mesafe */
-    dx = END_POS[0] - cam->pos[0];
-    dy = END_POS[1] - cam->pos[2];
+    dx = END_POS[0] - f->pos[0];
+    dy = END_POS[1] - f->pos[2];
     snprintf(buf, sizeof(buf), "%d units", (int)sqrtf(dx * dx + dy * dy));
     font_draw_text(MAP_X + MAP_W - 92, MAP_Y + 7, 1, buf, COL_ROUTE);
 }

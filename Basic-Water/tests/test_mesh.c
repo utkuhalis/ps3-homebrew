@@ -67,7 +67,8 @@ int main(void)
     /* Kumanda yuzeyleri ayri parca olarak gelmeli - animasyon buna bagli */
     {
         const char *need[] = { "Air Plane", "flap_left", "flap_right",
-                               "aileron_left", "aileron_right", "rudder" };
+                               "aileron_left", "aileron_right", "rudder",
+                               "wheel_front", "wheel_left", "wheel_right" };
         size_t n;
 
         for (n = 0; n < sizeof(need) / sizeof(need[0]); n++) {
@@ -91,7 +92,7 @@ int main(void)
     free(buf);
 
     if (failures == 0)
-        printf("\n4 kontrol, 0 hata\n");
+        printf("\n5 kontrol, 0 hata\n");
     else
         printf("\n%d HATA\n", failures);
     return failures ? 1 : 0;

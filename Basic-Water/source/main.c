@@ -322,7 +322,7 @@ int main(int argc, const char *argv[])
             gauges_draw(flight_speed_kmh(&plane), flight_altitude(&plane),
                         plane.pitch, plane.roll);
             objectives_draw(&objs);
-            minimap_draw(&cam);
+            minimap_draw(&plane);
             waypoint_draw_all(&cam, &proj);
         }
         gamemenu_draw(&menu);

@@ -40,7 +40,8 @@ typedef enum {
     SURF_NONE = 0,
     SURF_FLAP_L, SURF_FLAP_R,
     SURF_AIL_L,  SURF_AIL_R,
-    SURF_RUDDER
+    SURF_RUDDER,
+    SURF_WHEEL          /* tekerlek gobegi: hizla orantili doner */
 } SurfaceKind;
 
 typedef struct {
@@ -57,6 +58,9 @@ static SurfaceKind kind_of(const char *name)
     if (strcmp(name, "aileron_left") == 0)  return SURF_AIL_L;
     if (strcmp(name, "aileron_right") == 0) return SURF_AIL_R;
     if (strcmp(name, "rudder") == 0)        return SURF_RUDDER;
+    if (strcmp(name, "wheel_front") == 0)   return SURF_WHEEL;
+    if (strcmp(name, "wheel_left") == 0)    return SURF_WHEEL;
+    if (strcmp(name, "wheel_right") == 0)   return SURF_WHEEL;
     return SURF_NONE;
 }
 
@@ -74,6 +78,8 @@ static float surface_angle(SurfaceKind k, const Flight *f)
         return  f->in_roll * AILERON_MAX_RAD;
     case SURF_RUDDER:
         return f->in_yaw * RUDDER_MAX_RAD;
+    case SURF_WHEEL:
+        return f->wheel_spin;
     default:
         return 0.0f;
     }
@@ -171,7 +177,12 @@ int aircraft_init(void)
 
         part_info[i].hinge[0] = (mn[0] + mx[0]) * 0.5f;
         part_info[i].hinge[1] = (mn[1] + mx[1]) * 0.5f;
-        part_info[i].hinge[2] = mn[2];      /* on kenar: en kucuk Z */
+
+        /* Kumanda yuzeyleri ON KENARINDAN doner; tekerlek ise kendi
+         * MERKEZI etrafinda. */
+        part_info[i].hinge[2] = (part_info[i].kind == SURF_WHEEL)
+                                ? (mn[2] + mx[2]) * 0.5f
+                                : mn[2];
     }
 
     for (i = 0; i < model.part_count; i++) {

@@ -318,6 +318,58 @@ static void test_gercek_stall_calisiyor(void)
     CHECK(stalled_once, "asiri hucum acisinda stall algilaniyor");
 }
 
+/* Pist collideri DIKDORTGEN olmali: pist 1100x96 birim, daire kullanmak
+ * ucagin pistin yanindaki denize asfalta iner gibi konmasina yol aciyordu. */
+static void test_pist_dikdortgen_collider(void)
+{
+    Flight f;
+    float rw[2] = { 0.0f, 0.0f };
+
+    printf("test: pist collideri dikdortgen\n");
+
+    /* pist yonu 0: burun -Z, yani pist Z ekseninde uzanir */
+    flight_init_on_runway(&f, rw, 0.0f, 0.0f);
+
+    CHECK(flight_over_runway(&f, 0.0f, 0.0f), "merkez pist uzerinde");
+    CHECK(flight_over_runway(&f, 0.0f, -500.0f), "pist basi uzerinde");
+    CHECK(flight_over_runway(&f, 0.0f, 500.0f), "pist sonu uzerinde");
+    CHECK(flight_over_runway(&f, 40.0f, 0.0f), "pist genisligi icinde");
+
+    CHECK(!flight_over_runway(&f, 200.0f, 0.0f),
+          "pistin 200 birim yani DISARIDA");
+    CHECK(!flight_over_runway(&f, 0.0f, 700.0f),
+          "pistin 700 birim otesi DISARIDA");
+    CHECK(!flight_over_runway(&f, 60.0f, 0.0f),
+          "genislik sinirinin disi DISARIDA");
+
+    /* dondurulmus pist: yon 90 derece -> pist X ekseninde uzanir */
+    flight_init_on_runway(&f, rw, 1.5708f, 0.0f);
+    CHECK(flight_over_runway(&f, 500.0f, 0.0f),
+          "dondurulmus pistte uzun eksen dogru");
+    CHECK(!flight_over_runway(&f, 0.0f, 200.0f),
+          "dondurulmus pistte enine sinir dogru");
+}
+
+/* Pistin yanindaki denize inen ucak, asfaltta gibi davranmamali */
+static void test_pist_yaninda_su(void)
+{
+    Flight f;
+    float rw[2] = { 0.0f, 0.0f };
+    int i;
+
+    printf("test: pistin yanina inince su gibi davraniyor\n");
+
+    flight_init_on_runway(&f, rw, 0.0f, 0.0f);
+    f.pos[0] = 300.0f;              /* pistin 300 birim yani: deniz */
+    f.pos[1] = DECK_Y + 20.0f;
+    f.vel[1] = -8.0f;
+
+    for (i = 0; i < 600; i++)
+        flight_update(&f, 1.0f / 60.0f);
+
+    CHECK(f.pos[1] < DECK_Y, "pist yaninda deniz seviyesine iniyor");
+}
+
 int main(void)
 {
     test_pistte_basliyor();
@@ -326,6 +378,8 @@ int main(void)
     test_gear_surukleme();
     test_donuste_sahte_stall_yok();
     test_gercek_stall_calisiyor();
+    test_pist_dikdortgen_collider();
+    test_pist_yaninda_su();
     test_tasima_hizla_artiyor();
     test_stall();
     test_flap_kritik_aciyi_artiriyor();

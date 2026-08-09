@@ -48,6 +48,8 @@ def bisect_wing(obj, sign, offset):
     """
     import mathutils
 
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
     bm = bmesh.from_edit_mesh(obj.data)
@@ -114,6 +116,8 @@ def split(obj, name, test):
     mw = obj.matrix_world
     nw = mw.to_3x3()
 
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.mode_set(mode='EDIT')
     bm = bmesh.from_edit_mesh(obj.data)
@@ -146,10 +150,87 @@ def split(obj, name, test):
     return n
 
 
+WHEEL_MATERIALS = ('Material.005', 'Material.006')   # lastik ve jant
+
+
+def split_wheels():
+    """Tekerlek gobegini suspansiyon bacagindan ayirir.
+
+    Lastik ve jant kendi materyallerini kullaniyor, bacak baskasini; ayirmadan
+    tekerlegi dondurmek bacagi da dondururdu.
+
+    Kaynak nesneler ISIMLE degil, ICERIKLE bulunur: nesne adlari ice aktarma
+    ve onceki ayirmalar sirasinda kayiyor, sabit isme guvenmek kirilgandi.
+    Olcut: tekerlek materyali iceren ve govde disinda kalan nesneler; sag/sol/
+    burun ayrimi bounding box merkezinden gelir. """
+    from mathutils import Vector
+
+    # Hedefler ONCE belirlenir: ayirma sirasinda bpy.data.objects degisiyor
+    # ve isimler kayiyor, uzerinde gezerken islem yapmak guvenli degil.
+    targets = []
+    for o in list(bpy.data.objects):
+        if o.type != 'MESH' or o.name == BODY:
+            continue
+        if len(o.data.polygons) < 500:
+            continue
+        has = any(m is not None and m.name in WHEEL_MATERIALS
+                  for m in o.data.materials)
+        if not has:
+            continue
+
+        bb = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        cx = sum(v[0] for v in bb) / 8.0
+        targets.append((o, cx))
+
+    for o, cx in targets:
+        name = 'wheel_left' if cx < -0.5 else (
+               'wheel_right' if cx > 0.5 else 'wheel_front')
+
+        wheel_idx = set(i for i, m in enumerate(o.data.materials)
+                        if m is not None and m.name in WHEEL_MATERIALS)
+
+        # Secimi temizlemeden EDIT moduna girmek tehlikeli: mesh.separate
+        # SECILI TUM nesnelerde calisiyor ve govdeyi de parcaliyordu.
+        bpy.ops.object.select_all(action='DESELECT')
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.mode_set(mode='EDIT')
+        bm = bmesh.from_edit_mesh(o.data)
+        bm.faces.ensure_lookup_table()
+
+        n = 0
+        for f in bm.faces:
+            f.select = f.material_index in wheel_idx
+            if f.select:
+                n += 1
+        bmesh.update_edit_mesh(o.data)
+
+        if n == 0:
+            bpy.ops.object.mode_set(mode='OBJECT')
+            continue
+
+        # Yeni nesne ISIMLE degil REFERANSLA bulunur: isim kaymasi
+        # yanlis nesneyi yeniden adlandiriyordu (govde 'wheel_front'
+        # olarak isaretlenmisti).
+        before = set(bpy.data.objects.values())
+        bpy.ops.mesh.separate(type='SELECTED')
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        fresh = [x for x in bpy.data.objects.values() if x not in before]
+        src_name = o.name
+        if fresh:
+            fresh[0].name = name
+            print('  %-14s -> %-13s %5d yuz (merkez X %.2f)'
+                  % (src_name, name, n, cx))
+
+
 def main():
     body = load()
 
     # Once kanatlari arka kenar cizgisinden kes, sonra parcalari ayir
+    print('\n=== TEKERLEKLER AYRILIYOR ===')
+    split_wheels()
+
     print('\n=== KANATLAR KESILIYOR ===')
     bisect_wing(body, -1.0, 0.55)
     bisect_wing(body,  1.0, 0.55)
