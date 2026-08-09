@@ -1,0 +1,10 @@
+# Varlik donusturme araclari (dokular ve font atlasi).
+#
+# ps3dev imajinda goruntu ve font kutuphaneleri yok; bunlari oraya kurmak
+# yerine ayri, tek seferlik bir imaj kullaniliyor - Dockerfile.shaders ile
+# ayni mantik. Host makineye hicbir sey kurulmaz.
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir Pillow==11.0.0 fonttools==4.55.0
+
+WORKDIR /project

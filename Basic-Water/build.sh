@@ -16,11 +16,17 @@ set -e
 
 PS3_IMAGE=zeldin/ps3dev-docker:latest
 CG_IMAGE=ps3-cgcomp:latest
+ASSET_IMAGE=ps3-assets:latest
 cd "$(dirname "$0")"
 
 if ! docker image inspect "$CG_IMAGE" >/dev/null 2>&1; then
     echo ">>> Shader derleyici imaji olusturuluyor (tek seferlik)."
     docker build --platform linux/amd64 -f Dockerfile.shaders -t "$CG_IMAGE" .
+fi
+
+if [ -d assets/texture ] && ! docker image inspect "$ASSET_IMAGE" >/dev/null 2>&1; then
+    echo ">>> Varlik donusturme imaji olusturuluyor (tek seferlik)."
+    docker build --quiet -f Dockerfile.assets -t "$ASSET_IMAGE" . >/dev/null
 fi
 
 if ! docker image inspect "$PS3_IMAGE" >/dev/null 2>&1; then
@@ -152,6 +158,17 @@ if [ -f "$MODEL_SRC" ]; then
         mkdir -p data
         $PS3_RUN python3 tools/glb_to_mesh.py "$MODEL_SRC" data/plane.bin \
             --scale 0.62 --flip
+    fi
+fi
+
+# 0b) Dokular: JPG -> RSX'e hazir ARGB + mip zinciri
+if [ -d assets/texture ]; then
+    newest=$(ls -t assets/texture/*.jpg 2>/dev/null | head -1)
+    if [ -n "$newest" ] && { [ ! -f data/textures.bin ] || [ "$newest" -nt data/textures.bin ]; }; then
+        echo ">>> Dokular donusturuluyor"
+        mkdir -p data
+        docker run --rm -v "$PWD":/project -w /project "$ASSET_IMAGE" \
+            python3 tools/make_textures.py assets/texture data/textures.bin
     fi
 fi
 
