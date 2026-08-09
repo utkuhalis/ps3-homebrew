@@ -56,12 +56,13 @@ VT_SWEEP     = 1.5
 
 ENG_LEN      = 2.4
 ENG_R        = 0.62
-ENG_X        = 1.55
+ENG_X        = 1.42     # govdeye daha yakin
 ENG_Y        = 0.35
 ENG_Z        = 2.9
 
-GEAR_R       = 0.34     # tekerlek yaricapi
-GEAR_W       = 0.20
+GEAR_R       = 0.38     # tekerlek yaricapi
+GEAR_W       = 0.26
+STRUT_R      = 0.13     # bacak yaricapi (0.10 iken cizgi gibi kaliyordu)
 
 
 def clear():
@@ -410,13 +411,18 @@ def main():
                         ENG_R, ENG_LEN)
         add_material(eng, 'engine', (0.42, 0.44, 0.47), metallic=0.8)
 
+        # pilon: motoru govdeye baglar, motor havada asili durmasin
+        pylon = make_tube('pylon_%s' % tag, side * (ENG_X * 0.55), ENG_Y,
+                          ENG_Z, 0.16, ENG_LEN * 0.7, sides=6)
+        add_material(pylon, 'skin', (0.86, 0.87, 0.89))
+
         fan = make_tube('fan_%s' % tag, side * ENG_X, ENG_Y,
                         ENG_Z - ENG_LEN * 0.48, ENG_R * 0.86, 0.06)
         add_material(fan, 'dark', (0.05, 0.05, 0.06), metallic=0.3)
 
         # ana inis takimi
-        strut = make_tube('gear_%s' % tag, side * 1.15, -1.15, WING_Z + 0.2,
-                          0.10, 1.5, sides=8)
+        strut = make_tube('gear_%s' % tag, side * 1.15, -1.05, WING_Z + 0.2,
+                          STRUT_R, 1.6, sides=10)
         add_material(strut, 'metal', (0.35, 0.36, 0.38), metallic=0.9)
 
         wheel = make_wheel('wheel_%s' % tag, side * 1.15, -1.85, WING_Z + 0.2)
@@ -444,11 +450,26 @@ def main():
     add_material(rud, 'control', (0.24, 0.38, 0.66))
 
     # burun takimi
-    ns = make_tube('gear_front', 0.0, -1.05, -FUS_LEN * 0.5 + 2.2,
-                   0.08, 1.3, sides=8)
+    ns = make_tube('gear_front', 0.0, -0.95, -FUS_LEN * 0.5 + 2.2,
+                   STRUT_R * 0.8, 1.5, sides=10)
     add_material(ns, 'metal', (0.35, 0.36, 0.38), metallic=0.9)
     nw = make_wheel('wheel_front', 0.0, -1.62, -FUS_LEN * 0.5 + 2.2)
     add_material(nw, 'tyre', (0.06, 0.06, 0.07), metallic=0.0, rough=0.9)
+
+    # Normalleri disa bakacak sekilde yeniden hesapla.
+    # Yuz siralarini elle tutturmaya calismak kirilgandi: govde ustten
+    # karanlik goruluyordu cunku bazi yuzlerin normali iceri bakiyordu.
+    for ob in bpy.data.objects:
+        if ob.type != 'MESH':
+            continue
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        ob.select_set(False)
 
     unwrap_all()
 

@@ -66,9 +66,11 @@ int main(void)
 
     /* Kumanda yuzeyleri ayri parca olarak gelmeli - animasyon buna bagli */
     {
-        const char *need[] = { "Air Plane", "flap_left", "flap_right",
+        const char *need[] = { "body", "flap_left", "flap_right",
                                "aileron_left", "aileron_right", "rudder",
-                               "wheel_front", "wheel_left", "wheel_right" };
+                               "wheel_front", "wheel_left", "wheel_right",
+                               "spoiler_left", "spoiler_right",
+                               "elevator_left", "elevator_right" };
         size_t n;
 
         for (n = 0; n < sizeof(need) / sizeof(need[0]); n++) {

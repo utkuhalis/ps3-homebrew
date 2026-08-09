@@ -26,7 +26,7 @@
  * altindaki inis takimi grubudur (tekerlekler ve destekleri) - takim
  * kapaliyken cizilmezler. */
 
-#define BODY_PART_NAME "Air Plane"
+#define BODY_PART_NAME "body"
 
 /* Hareketli kumanda yuzeyleri.
  *
@@ -41,7 +41,10 @@ typedef enum {
     SURF_FLAP_L, SURF_FLAP_R,
     SURF_AIL_L,  SURF_AIL_R,
     SURF_RUDDER,
-    SURF_WHEEL          /* tekerlek gobegi: hizla orantili doner */
+    SURF_ELEV_L, SURF_ELEV_R,
+    SURF_SPOIL_L, SURF_SPOIL_R,
+    SURF_WHEEL,         /* tekerlek gobegi: hizla orantili doner */
+    SURF_FIXED          /* govdeyle birlikte duran, ama ayri cizilen parca */
 } SurfaceKind;
 
 typedef struct {
@@ -58,10 +61,12 @@ static SurfaceKind kind_of(const char *name)
     if (strcmp(name, "aileron_left") == 0)  return SURF_AIL_L;
     if (strcmp(name, "aileron_right") == 0) return SURF_AIL_R;
     if (strcmp(name, "rudder") == 0)        return SURF_RUDDER;
-    if (strcmp(name, "wheel_front") == 0)   return SURF_WHEEL;
-    if (strcmp(name, "wheel_left") == 0)    return SURF_WHEEL;
-    if (strcmp(name, "wheel_right") == 0)   return SURF_WHEEL;
-    return SURF_NONE;
+    if (strcmp(name, "elevator_left") == 0)  return SURF_ELEV_L;
+    if (strcmp(name, "elevator_right") == 0) return SURF_ELEV_R;
+    if (strcmp(name, "spoiler_left") == 0)   return SURF_SPOIL_L;
+    if (strcmp(name, "spoiler_right") == 0)  return SURF_SPOIL_R;
+    if (strncmp(name, "wheel_", 6) == 0)    return SURF_WHEEL;
+    return SURF_FIXED;
 }
 
 /* Yuzeyin o anki sapma acisi (radyan). Isaretler: flap asagi pozitif,
@@ -78,6 +83,12 @@ static float surface_angle(SurfaceKind k, const Flight *f)
         return  f->in_roll * AILERON_MAX_RAD;
     case SURF_RUDDER:
         return f->in_yaw * RUDDER_MAX_RAD;
+    case SURF_ELEV_L:
+    case SURF_ELEV_R:
+        return -f->in_pitch * ELEVATOR_MAX_RAD;
+    case SURF_SPOIL_L:
+    case SURF_SPOIL_R:
+        return -f->spoiler * SPOILER_MAX_RAD;   /* yukari kalkar */
     case SURF_WHEEL:
         return f->wheel_spin;
     default:
@@ -183,6 +194,8 @@ int aircraft_init(void)
         part_info[i].hinge[2] = (part_info[i].kind == SURF_WHEEL)
                                 ? (mn[2] + mx[2]) * 0.5f
                                 : mn[2];
+
+        /* Tekerlek X ekseninde doner: mentese noktasi govde merkezidir. */
     }
 
     for (i = 0; i < model.part_count; i++) {
@@ -400,13 +413,20 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
     for (p = 0; p < model.part_count; p++) {
         AcVertex *base = &verts[part_vtx_base[p]];
 
-        /* inis takimi kapaliyken govde disindaki parcalar cizilmez */
-        if (p != body_part && part_info[p].kind == SURF_NONE
-            && f->gear_pos < 0.02f)
+        /* Inis takimi kapaliyken tekerlek ve bacaklar cizilmez.
+         * Parca adi "gear"/"wheel" ile baslayanlar takim grubudur. */
+        if (f->gear_pos < 0.02f
+            && (strncmp(model.part[p].name, "gear", 4) == 0
+                || strncmp(model.part[p].name, "wheel", 5) == 0))
             continue;
 
-        /* uzaktan bakildiginda kucuk parcalar atlanir (LOD) */
-        if (p != body_part && cam_dist2 > LOD_SMALL_PARTS_DIST2)
+        /* Uzaktan bakildiginda YALNIZCA kucuk parcalar atlanir. Once govde
+         * disindaki her sey atlaniyordu; artik kanat ve kuyruk da ayri
+         * parca oldugu icin bu ucagi govdeye indirirdi. */
+        if (cam_dist2 > LOD_SMALL_PARTS_DIST2
+            && (part_info[p].kind == SURF_WHEEL
+                || strncmp(model.part[p].name, "gear", 4) == 0
+                || strncmp(model.part[p].name, "fan", 3) == 0))
             continue;
 
         rsxAddressToOffset(&base[0].x, &off);

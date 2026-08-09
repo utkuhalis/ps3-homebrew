@@ -7,7 +7,9 @@
  * ek bir bayt cevrimi gerekmez. Modul yalnizca isaretci hesaplar; kopya
  * yapmaz. */
 
-#define MESH_MAX_PARTS 16
+/* Kendi urettigimiz modelde her hareketli yuzey ayri parca: 27 adet.
+ * Sinir 16 iken model yuklenemiyordu. */
+#define MESH_MAX_PARTS 40
 
 typedef struct {
     char         name[32];

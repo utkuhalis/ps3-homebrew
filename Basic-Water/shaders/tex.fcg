@@ -7,7 +7,7 @@ void main
 	float4 worldPos : TEXCOORD1,
 	float2 uv       : TEXCOORD2,
 
-	uniform sampler2D surfaceMap,
+	uniform sampler2D surfaceMap : TEXUNIT0,
 	uniform float4 eyePosition,
 	uniform float4 horizonCol,
 	uniform float  fogDistance,
