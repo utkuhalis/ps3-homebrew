@@ -28,6 +28,7 @@
 #include "audio.h"
 #include "autopilot.h"
 #include "profiler.h"
+#include "texture.h"
 
 SYS_PROCESS_PARAM(1001, 0x100000)
 
@@ -95,6 +96,10 @@ int main(int argc, const char *argv[])
         rsx3d_exit();
         return 1;
     }
+
+    rc = texture_init();
+    ps3log("texture_init -> %d (%d doku)", rc, texture_count());
+    /* Doku yuklenemezse oyun dokusuz devam eder; durdurmaya degmez. */
 
     rc = runway_init();
     ps3log("runway_init -> %d", rc);

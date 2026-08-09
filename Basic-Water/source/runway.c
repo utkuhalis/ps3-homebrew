@@ -6,10 +6,11 @@
 #include <rsx/rsx.h>
 
 #include "runway.h"
+#include "texture.h"
 #include "rsx3d.h"
 
-#include "solid_vpo.h"
-#include "solid_fpo.h"
+#include "tex_vpo.h"
+#include "tex_fpo.h"
 
 /* Kalkis ve inis pistleri. Yonleri farkli ki kalkis ile inis ayni
  * hissettirmesin. */
@@ -33,6 +34,7 @@ typedef struct {
     float x, y, z;
     float r, g, b;
     float bright, pad;
+    float u, v;                 /* doku koordinati */
 } SolidVertex;
 
 /* Her pist: platform + asfalt + esik cizgileri + orta cizgi parcalari */
@@ -46,16 +48,21 @@ static SolidVertex *verts = NULL;
 static u16 *idx = NULL;
 static int quad_count = 0;
 
-static rsxVertexProgram   *vp = (rsxVertexProgram *)solid_vpo;
-static rsxFragmentProgram *fp = (rsxFragmentProgram *)solid_fpo;
+static rsxVertexProgram   *vp = (rsxVertexProgram *)tex_vpo;
+static rsxFragmentProgram *fp = (rsxFragmentProgram *)tex_fpo;
 static void *vp_ucode = NULL;
 static void *fp_ucode = NULL;
 static u32  *fp_buf = NULL;
 static u32   fp_off = 0;
 
 static rsxProgramConst *c_mvp, *c_eye, *c_hor, *c_fog;
+static int tex_unit = 0;
+static int tex_index = -1;
 
 /* Yatay bir dortgen ekler: merkez (cx,cz), boyut (w x l), yatayda donuk */
+/* Dokunun kac dunya birimini kapladigi. Kucuk deger = sik tekrar. */
+#define TEX_WORLD_SIZE 9.0f
+
 static void add_quad(float cx, float cz, float y, float w, float l,
                      float angle, float r, float g, float b, float bright)
 {
@@ -78,6 +85,12 @@ static void add_quad(float cx, float cz, float y, float w, float l,
         v[i].r = r; v[i].g = g; v[i].b = b;
         v[i].bright = bright;
         v[i].pad = 0.0f;
+
+        /* UV dunya olceginde: doku parca boyutundan bagimsiz olarak ayni
+         * sikilikta tekrar eder, boylece pist ve cevresi ayni dokuda
+         * farkli olcekte gorunmez. */
+        v[i].u = (cx + ox[i] * ca - oz[i] * sa) / TEX_WORLD_SIZE;
+        v[i].v = (cz + ox[i] * sa + oz[i] * ca) / TEX_WORLD_SIZE;
     }
 
     quad_count++;
@@ -161,6 +174,11 @@ int runway_init(void)
     if (rsxAddressToOffset(fp_buf, &fp_off) != 0)
         return -3;
 
+    /* Shader'da tek sampler var, o da 0. birime duser.
+     * (rsxFragmentProgramGetAttribIndex basliкta bildirilmis ama librsx
+     * icinde tanimli degil, o yuzden yansima ile sorulamiyor.) */
+    tex_unit = 0;
+
     c_eye = rsxFragmentProgramGetConst(fp, "eyePosition");
     c_hor = rsxFragmentProgramGetConst(fp, "horizonCol");
     c_fog = rsxFragmentProgramGetConst(fp, "fogDistance");
@@ -196,7 +214,7 @@ void runway_draw(const Camera *cam, const Mat4 *proj, const Atmosphere *atm)
 
     rsxAddressToOffset(&verts[0].bright, &off);
     rsxBindVertexArrayAttrib(ctx, GCM_VERTEX_ATTRIB_TEX0, 0, off,
-                             sizeof(SolidVertex), 2, GCM_VERTEX_DATA_TYPE_F32,
+                             sizeof(SolidVertex), 4, GCM_VERTEX_DATA_TYPE_F32,
                              GCM_LOCATION_RSX);
 
     rsxLoadVertexProgram(ctx, vp, vp_ucode);
@@ -207,6 +225,10 @@ void runway_draw(const Camera *cam, const Mat4 *proj, const Atmosphere *atm)
     if (c_fog) rsxSetFragmentProgramParameter(ctx, fp, c_fog, &fog, fp_off, GCM_LOCATION_RSX);
 
     rsxLoadFragmentProgramLocation(ctx, fp, fp_off, GCM_LOCATION_RSX);
+
+    if (tex_index < 0)
+        tex_index = texture_find("runway");
+    texture_bind(tex_unit, tex_index);
 
     rsxSetUserClipPlaneControl(ctx,
                                GCM_USER_CLIP_PLANE_DISABLE,

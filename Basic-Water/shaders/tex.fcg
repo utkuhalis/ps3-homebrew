@@ -1,0 +1,26 @@
+/* Dokulu 3D nesneler - fragment programi.
+ * Doku rengi vertex rengiyle carpilir (vertex rengi aydinlatmayi tasir),
+ * sonra mesafeyle ufuk rengine karisir. */
+void main
+(
+	float4 color    : TEXCOORD0,
+	float4 worldPos : TEXCOORD1,
+	float2 uv       : TEXCOORD2,
+
+	uniform sampler2D surfaceMap,
+	uniform float4 eyePosition,
+	uniform float4 horizonCol,
+	uniform float  fogDistance,
+
+	out float4 oColor
+)
+{
+	float3 tex = tex2D(surfaceMap, uv).rgb;
+	float3 col = color.rgb * tex * 1.85f;
+
+	float dist = length(worldPos.xyz - eyePosition.xyz);
+	float fog = saturate(dist / fogDistance);
+	fog = fog * fog;
+
+	oColor = float4(lerp(col, horizonCol.xyz, fog), 1.0f);
+}
