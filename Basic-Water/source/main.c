@@ -29,6 +29,7 @@
 #include "autopilot.h"
 #include "profiler.h"
 #include "texture.h"
+#include "world.h"
 
 SYS_PROCESS_PARAM(1001, 0x100000)
 
@@ -80,13 +81,6 @@ int main(int argc, const char *argv[])
         return 1;
     }
 
-    rc = scene_init();
-    ps3log("scene_init -> %d", rc);
-    if (rc < 0) {
-        printf("HATA: scene_init basarisiz (%d)\n", rc);
-        rsx3d_exit();
-        return 1;
-    }
 
     rc = aircraft_init();
     ps3log("aircraft_init -> %d (%u ucgen)", rc,
@@ -101,10 +95,11 @@ int main(int argc, const char *argv[])
     ps3log("texture_init -> %d (%d doku)", rc, texture_count());
     /* Doku yuklenemezse oyun dokusuz devam eder; durdurmaya degmez. */
 
-    rc = runway_init();
-    ps3log("runway_init -> %d", rc);
+    rc = world_init_all();
+    ps3log("world_init_all -> %d (%d dunya, secili: %s)", rc, world_count(),
+           world_current()->name);
     if (rc < 0) {
-        printf("HATA: runway_init basarisiz (%d)\n", rc);
+        printf("HATA: world_init_all basarisiz (%d)\n", rc);
         rsx3d_exit();
         return 1;
     }
@@ -137,9 +132,14 @@ int main(int argc, const char *argv[])
     autopilot_init(&ap);
     atmosphere_compute(&atm, menu.weather, menu.time);
     objectives_init(&objs);
-    /* Pistte, motor rolantide basla: kalkisi oyuncu yapar. */
-    flight_init_on_runway(&plane, RUNWAY_POS[0], 0.55f,
-                          RUNWAY_LENGTH * 0.45f);
+    /* Pistte, motor rolantide basla: kalkisi oyuncu yapar.
+     * Baslangic noktasi secili dunyadan gelir. */
+    {
+        float start_xz[2], heading, offset;
+
+        world_current()->start_point(start_xz, &heading, &offset);
+        flight_init_on_runway(&plane, start_xz, heading, offset);
+    }
     proj = mat4_perspective(FOV_DEG * 3.14159265f / 180.0f,
                             rsx3d_aspect(), Z_NEAR, Z_FAR);
 
@@ -298,12 +298,8 @@ int main(int argc, const char *argv[])
         rsx3d_begin_frame(SKY_CLEAR_COLOR);
 
         prof_begin(PROF_SCENE);
-        scene_draw(&cam, &proj, time_sec, &atm);
+        world_current()->draw(&cam, &proj, time_sec, &atm);
         prof_end(PROF_SCENE);
-
-        prof_begin(PROF_RUNWAY);
-        runway_draw(&cam, &proj, &atm);
-        prof_end(PROF_RUNWAY);
 
         /* kokpit gorusunde kendi ucagimizi cizmiyoruz */
         prof_begin(PROF_AIRCRAFT);
