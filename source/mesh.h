@@ -13,11 +13,15 @@
  * yakaladi. */
 #define MESH_MAX_PARTS 64
 
+/* Vertex duzeni: x,y,z, nx,ny,nz, r,g,b, metallic */
+#define MESH_VERTEX_FLOATS 10
+#define MESH_VERTEX_BYTES  (MESH_VERTEX_FLOATS * 4)
+
 typedef struct {
     char         name[32];
     unsigned int vertex_count;
     unsigned int index_count;
-    const float *verts;         /* 9 float: x,y,z, nx,ny,nz, r,g,b */
+    const float *verts;         /* MESH_VERTEX_FLOATS float */
     const unsigned short *idx;
 } MeshPart;
 

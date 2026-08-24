@@ -6,13 +6,13 @@ Cikti, PS3 tarafinda dogrudan vertex tamponuna kopyalanabilecek duz bir
 ikili dosyadir (big-endian, PowerPC ile ayni siralama).
 
 Bicim:
-    magic   "BWM1"                       4 bayt
+    magic   "BWM2"                       4 bayt
     parca sayisi                         u32
     her parca icin:
         ad                               32 bayt (null ile doldurulmus)
         vertex sayisi                    u32
         index sayisi                     u32
-        vertexler: x,y,z, nx,ny,nz, r,g,b   9 x float32
+        vertexler: x,y,z, nx,ny,nz, r,g,b, metallic  10 x float32
         indexler:  u16
         (parca sonu 4 bayta hizalanir)
 
@@ -116,6 +116,26 @@ def to_game_axes(v, flip):
     return (-x, y, -z) if flip else (x, y, z)
 
 
+def material_metallic(js, index):
+    """Materyalin metaliklik degeri; shader yansimayi buna gore olceklendirir.
+
+    Govde ve motor kaportasi metalik, lastik ve kaucuk degil. Bu ayrim
+    olmadan tum ucak ayni parlakliga sahip oluyor ve plastik gibi duruyor."""
+    if index is None:
+        return 0.0
+
+    mat = js['materials'][index]
+    if mat.get('name') == 'glass':
+        return 0.85
+
+    pbr = mat.get('pbrMetallicRoughness', {})
+    metal = pbr.get('metallicFactor', 0.0)
+    rough = pbr.get('roughnessFactor', 0.5)
+
+    # Puruzluluk yansimayi bir miktar kirar ama tamamen yok etmez.
+    return max(0.0, min(1.0, metal * (1.0 - rough * 0.35)))
+
+
 def material_color(js, index):
     """glTF materyalinden vertex rengi.
 
@@ -186,15 +206,34 @@ def convert(src, dst, flip=False, scale=1.0):
                    if 'NORMAL' in attrs else [(0, 1, 0)] * len(pos))
 
             color = material_color(js, prim.get('material'))
+            metallic = material_metallic(js, prim.get('material'))
+
+            # Vertex renkleri varsa onlar oncelikli: doku bilgisi bunlara
+            # islenmis oluyor (bkz. tools/blender/import_737.py). Alfa
+            # kanali metakligi tasir.
+            vcol = None
+            if 'COLOR_0' in attrs:
+                vcol = accessor(js, bin_, attrs['COLOR_0'])
 
             base = len(verts)
-            for p, n in zip(pos, nrm):
+            for vi, (p, n) in enumerate(zip(pos, nrm)):
                 wp = to_game_axes(apply(mat, p), flip)
                 wn = to_game_axes(apply(mat, n, False), flip)
                 ln = (wn[0] ** 2 + wn[1] ** 2 + wn[2] ** 2) ** 0.5 or 1.0
+                cr, cg, cb, cm = color[0], color[1], color[2], metallic
+                if vcol is not None and vi < len(vcol):
+                    c = vcol[vi]
+                    # unsigned short/byte gelirse 0..1'e olceklenir
+                    if isinstance(c[0], int):
+                        div = 65535.0 if max(c) > 255 else 255.0
+                        c = tuple(x / div for x in c)
+                    cr, cg, cb = c[0], c[1], c[2]
+                    if len(c) > 3:
+                        cm = c[3]
+
                 verts.append((wp[0] * scale, wp[1] * scale, wp[2] * scale,
                               wn[0] / ln, wn[1] / ln, wn[2] / ln,
-                              color[0], color[1], color[2]))
+                              cr, cg, cb, cm))
 
             if 'indices' in prim:
                 for i in accessor(js, bin_, prim['indices']):
@@ -215,13 +254,13 @@ def convert(src, dst, flip=False, scale=1.0):
               % (name, len(verts), len(idx) // 3))
 
     with open(dst, 'wb') as f:
-        f.write(b'BWM1')
+        f.write(b'BWM2')
         f.write(struct.pack('>I', len(parts)))
         for name, verts, idx in parts:
             f.write(name.encode('ascii', 'replace').ljust(32, b'\0'))
             f.write(struct.pack('>II', len(verts), len(idx)))
             for v in verts:
-                f.write(struct.pack('>9f', *v))
+                f.write(struct.pack('>10f', *v))
             for i in idx:
                 f.write(struct.pack('>H', i))
             # Sonraki parcanin vertex dizisi 4 bayta hizali baslamali:

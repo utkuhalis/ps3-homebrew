@@ -19,6 +19,9 @@ SRC = ("/Users/dc/Desktop/Projects/Games/unity-test/Gozcu-v1/Assets/"
 DST = os.path.join(os.path.dirname(__file__), '..', '..',
                    'assets', 'model', 'boeing737.glb')
 
+TEX_DIR = ("/Users/dc/Desktop/Projects/Games/unity-test/Gozcu-v1/Assets/"
+           "AirportPack/Textures/Boeing_737")
+
 PREFIX = 'SM_boeing737'
 
 
@@ -43,6 +46,58 @@ def game_name(raw):
     if n.startswith('gear_door'):
         return 'geardoor_' + n[len('gear_door_'):]
     return n
+
+
+# Parca adina gore malzeme. Model tamamen doku tabanli geldigi icin butun
+# materyalleri beyaz ve bilgisiz; dokuyu vertex rengine islemeyi denedik ama
+# Blender'in renk oznitelig glTF disa aktarimda beyaza donuyor. Bir 737'nin
+# hangi parcasinin neyden yapildigi zaten belli, o yuzden dogrudan atiyoruz.
+#
+# (ad oneki, r, g, b, metaliklik)
+MATERIALS = [
+    ('wheel',           0.06, 0.06, 0.07, 0.00),   # lastik
+    ('gear',            0.52, 0.54, 0.58, 0.85),   # krom bacak
+    ('geardoor',        0.86, 0.87, 0.89, 0.45),
+    ('fan',             0.18, 0.19, 0.21, 0.70),   # fan disk
+    ('thrust_reverser', 0.44, 0.45, 0.48, 0.80),
+    ('engine',          0.44, 0.45, 0.48, 0.80),
+    ('door',            0.82, 0.83, 0.85, 0.40),
+    ('spoiler',         0.80, 0.81, 0.84, 0.55),
+    ('flap',            0.84, 0.85, 0.88, 0.50),
+    ('aileron',         0.84, 0.85, 0.88, 0.50),
+    ('rudder',          0.22, 0.36, 0.62, 0.35),   # kuyruk rengi
+    ('body',            0.88, 0.89, 0.91, 0.45),   # govde: acik, metalik
+]
+
+
+def assign_materials():
+    """Her parcaya adina uyan malzemeyi verir."""
+    for ob in bpy.data.objects:
+        if ob.type != 'MESH':
+            continue
+
+        rgb = (0.85, 0.86, 0.88)
+        metal = 0.45
+        for prefix, r, g, b, m in MATERIALS:
+            if ob.name.startswith(prefix):
+                rgb = (r, g, b)
+                metal = m
+                break
+
+        mat = bpy.data.materials.new('M_' + ob.name)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get('Principled BSDF')
+        if bsdf:
+            bsdf.inputs['Base Color'].default_value = (rgb[0], rgb[1],
+                                                       rgb[2], 1.0)
+            bsdf.inputs['Metallic'].default_value = metal
+            bsdf.inputs['Roughness'].default_value = 0.30
+
+        ob.data.materials.clear()
+        ob.data.materials.append(mat)
+
+    print('  %d parcaya malzeme atandi'
+          % len([o for o in bpy.data.objects if o.type == 'MESH']))
 
 
 def main():
@@ -85,6 +140,9 @@ def main():
         print('  %-26s %6d ucgen' % (ob.name, n))
     print('  toplam %d ucgen, %d parca'
           % (tot, len([o for o in bpy.data.objects if o.type == 'MESH'])))
+
+    print('\n=== MALZEMELER ATANIYOR ===')
+    assign_materials()
 
     bpy.ops.object.select_all(action='DESELECT')
     bpy.ops.export_scene.gltf(filepath=os.path.abspath(DST),

@@ -1,0 +1,25 @@
+/* Ucak govdesi - vertex programi.
+ *
+ * Aydinlatma artik burada degil fragment tarafinda yapiliyor: vertex basina
+ * hesaplanan parlama (Gouraud) genis ucgenlerde kabalasiyordu ve govdenin
+ * uzerinde kayan bir isik lekesi gibi duruyordu. Buradan yalnizca normal,
+ * renk ve metaliklik gecirilir. */
+void main
+(
+	float3 vertexPosition : POSITION,
+	float3 vertexNormal   : NORMAL,
+	float4 vertexColor    : TEXCOORD0,  /* rgb + metaliklik */
+
+	uniform float4x4 mvpMatrix,
+
+	out float4 ePosition : POSITION,
+	out float4 oColor    : TEXCOORD0,
+	out float4 oWorldPos : TEXCOORD1,
+	out float3 oNormal   : TEXCOORD2
+)
+{
+	ePosition = mul(mvpMatrix, float4(vertexPosition, 1.0f));
+	oColor    = vertexColor;
+	oWorldPos = float4(vertexPosition, 1.0f);
+	oNormal   = vertexNormal;
+}

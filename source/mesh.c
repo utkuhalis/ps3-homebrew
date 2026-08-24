@@ -19,7 +19,7 @@ int mesh_load(Mesh *m, const void *data, unsigned int size)
 
     memset(m, 0, sizeof(*m));
 
-    if (size < 8 || p[0] != 'B' || p[1] != 'W' || p[2] != 'M' || p[3] != '1')
+    if (size < 8 || p[0] != 'B' || p[1] != 'W' || p[2] != 'M' || p[3] != '2')
         return -1;
 
     m->part_count = (int)be32(p + 4);
@@ -47,12 +47,12 @@ int mesh_load(Mesh *m, const void *data, unsigned int size)
         mp->index_count  = be32(p + off + 4);
         off += 8;
 
-        need = mp->vertex_count * 36 + mp->index_count * 2;
+        need = mp->vertex_count * MESH_VERTEX_BYTES + mp->index_count * 2;
         if (off + need > size)
             return -1;
 
         mp->verts = (const float *)(const void *)(p + off);
-        off += mp->vertex_count * 36;
+        off += mp->vertex_count * MESH_VERTEX_BYTES;
         mp->idx = (const unsigned short *)(const void *)(p + off);
         off += mp->index_count * 2;
 

@@ -39,6 +39,30 @@ int main(void)
         printf("FAIL: mesh_load basarisiz (uretici/okuyucu uyumsuz)\n");
         return 1;
     }
+
+    /* Metaliklik gecerli araliкta olmali: shader yansimayi bununla
+     * olceklendiriyor, bozuk deger tum govdeyi ayna ya da mat yapar. */
+    {
+        int bad = 0;
+        int p;
+
+        for (p = 0; p < m.part_count; p++) {
+            unsigned int v;
+
+            for (v = 0; v < m.part[p].vertex_count; v++) {
+                float mt = m.part[p].verts[v * MESH_VERTEX_FLOATS + 9];
+
+                if (!(mt >= -0.01f && mt <= 1.01f))
+                    bad++;
+            }
+        }
+        if (bad) {
+            printf("FAIL: %d vertexte metaliklik araligin disinda\n", bad);
+            failures++;
+        } else {
+            printf("test: metaliklik degerleri gecerli\n");
+        }
+    }
     printf("test: mesh_load gercek veriyi cozumluyor (%d parca)\n",
            m.part_count);
 
@@ -98,7 +122,7 @@ int main(void)
     free(buf);
 
     if (failures == 0)
-        printf("\n5 kontrol, 0 hata\n");
+        printf("\n6 kontrol, 0 hata\n");
     else
         printf("\n%d HATA\n", failures);
     return failures ? 1 : 0;
