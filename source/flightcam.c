@@ -226,10 +226,20 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
             cam->pos[i] += (eye[i] - cam->pos[i]) * k;
     }
 
-    /* Engeller: govde ve zemin. Kokpit modu bu kontrolden muaftir, cunku
-     * pilot zaten govdenin icinde oturur. */
-    flightcam_clamp(cam, f->pos, aircraft_bound_radius(),
-                    flightcam_ground_at(f, cam->pos[0], cam->pos[2]));
+    /* Engeller: govde ve zemin.
+     *
+     * Zemin olarak kameranin ALTINDAKI yuzey yetmiyor: ucak pistteyken
+     * kamera pistin yanina savruldugunda oradaki zemin deniz seviyesi
+     * oluyor, kamera 9 metre asagi inip pistin ALTINA giriyor ve pist
+     * gorusu kapatiyordu. Bu yuzden ucagin altindaki zemin de hesaba
+     * katilir; kamera ikisinin YUKSEK olanindan asagi inemez. */
+    {
+        float g_cam = flightcam_ground_at(f, cam->pos[0], cam->pos[2]);
+        float g_plane = flightcam_ground_at(f, f->pos[0], f->pos[2]);
+        float ground = (g_cam > g_plane) ? g_cam : g_plane;
+
+        flightcam_clamp(cam, f->pos, aircraft_bound_radius(), ground);
+    }
 
     /* Konum neresi olursa olsun kamera ucaga bakar: ucak her zaman
      * ekranin ortasinda kalir. */

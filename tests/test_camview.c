@@ -274,8 +274,57 @@ int main(void)
         }
     }
 
+    /* --- ucak pistteyken kamera pistin ALTINA inmemeli ---
+     * Bildirilen hata: kamera pistin yanina savruldugunda oradaki zemin
+     * deniz seviyesi oldugu icin 9 metre asagi iniyor, pist araya girip
+     * gorusu kapatiyordu. Zemin olarak ucagin altindaki yuzey de hesaba
+     * katilmali. */
+    {
+        Camera c;
+        Flight f;
+        float rw[2] = { 0.0f, 0.0f };
+        float g_cam, g_pl, ground;
+        int i;
+
+        printf("test: ucak pistteyken kamera pist seviyesinin altina inmiyor\n");
+
+        flight_init_on_runway(&f, rw, 0.0f, 0.0f);
+
+        /* kamerayi pistin yaninda, cok asagida dene */
+        for (i = 0; i < 8; i++) {
+            c.pos[0] = 200.0f + i * 60.0f;   /* pist genisliginin disi */
+            c.pos[1] = -50.0f;               /* deniz seviyesinin altinda */
+            c.pos[2] = f.pos[2];
+
+            g_cam = flightcam_ground_at(&f, c.pos[0], c.pos[2]);
+            g_pl  = flightcam_ground_at(&f, f.pos[0], f.pos[2]);
+            ground = (g_cam > g_pl) ? g_cam : g_pl;
+
+            flightcam_clamp(&c, f.pos, 21.0f, ground);
+
+            check(c.pos[1] >= DECK_Y,
+                  "pist yanindaki kamera pist yuzeyinin uzerinde kaliyor");
+        }
+
+        /* ucak denizin uzerindeyken pist kurali dayatilmamali */
+        f.pos[0] = 8000.0f;
+        f.pos[1] = 400.0f;
+        f.pos[2] = 8000.0f;
+        c.pos[0] = 8000.0f;
+        c.pos[1] = -50.0f;
+        c.pos[2] = 8100.0f;
+
+        g_cam = flightcam_ground_at(&f, c.pos[0], c.pos[2]);
+        g_pl  = flightcam_ground_at(&f, f.pos[0], f.pos[2]);
+        ground = (g_cam > g_pl) ? g_cam : g_pl;
+        flightcam_clamp(&c, f.pos, 21.0f, ground);
+
+        check(c.pos[1] < DECK_Y,
+              "acik denizde kamera gereksiz yere pist yuksekligine cikmiyor");
+    }
+
     if (failures == 0)
-        printf("\n31 kontrol, 0 hata\n");
+        printf("\n40 kontrol, 0 hata\n");
     else
         printf("\n%d HATA\n", failures);
     return failures ? 1 : 0;

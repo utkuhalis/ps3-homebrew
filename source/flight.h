@@ -46,6 +46,11 @@
  * yon degistirmek imkansizdir. */
 #define CONTROL_REF_MS     125.0f
 #define GEAR_DRAG            0.055f
+/* Yuzey hareket hizlari (birim/saniye). 737'de flap tam acilis ~15 s,
+ * hava freni ~2 s. */
+#define FLAP_RATE            0.09f
+#define SPOILER_RATE         0.55f
+
 #define WHEEL_RADIUS_M       0.55f  /* tekerlek yaricapi (donme animasyonu) */
 
 /* Pist yuzeyi olculeri (runway.h ile ayni olmali). Ucus modulu cizim
@@ -72,7 +77,11 @@ typedef struct {
 
     /* kumanda girdileri, -1..+1 (flap ve spoiler 0..1) */
     float in_pitch, in_roll, in_yaw;
-    float flap, spoiler;
+    /* Kumanda yuzeyleri: HEDEF ile GERCEK konum ayridir. Pilot kolu
+     * kademeye alir, yuzeyler oraya motor hiziyla ilerler - gercek ucakta
+     * flap tam acilmasi saniyeler surer. */
+    float flap, spoiler;                /* gercek konum 0..1 */
+    float flap_target, spoiler_target;  /* kolun bulundugu kademe */
     int   gear_down;            /* 1: tekerlekler acik */
     float gear_pos;             /* 0..1 animasyon konumu */
     int   brakes;               /* yerde fren */

@@ -221,21 +221,28 @@ int main(int argc, const char *argv[])
             if (plane.throttle < 0.0f) plane.throttle = 0.0f;
             if (plane.throttle > 1.0f) plane.throttle = 1.0f;
 
-            /* KARE: flap kademesi (0 -> 1/3 -> 2/3 -> tam -> 0) */
+            /* KARE: flap kolunu bir kademe ilerlet (0 -> 1/3 -> 2/3 -> tam
+             * -> 0). Yuzeyler bu hedefe motor hiziyla ilerler. */
             if (input_pressed(0, PAD_SQUARE)) {
-                plane.flap += 0.34f;
-                if (plane.flap > 1.01f)
-                    plane.flap = 0.0f;
+                plane.flap_target += 0.34f;
+                if (plane.flap_target > 1.01f)
+                    plane.flap_target = 0.0f;
             }
 
-            /* UCGEN: basili tutuldugu surece spoiler ve fren */
-            if (input_held(0, PAD_TRIANGLE)) {
-                plane.spoiler = 1.0f;
-                plane.brakes = 1;
-            } else {
-                plane.spoiler = 0.0f;
-                plane.brakes = 0;
+            /* UCGEN: hava freni kolu. Basili tutmak yerine kademe kademe
+             * ilerler ve OYLE KALIR: yarim (ucusta) -> tam (inişte) ->
+             * kapali. Gercek ucakta da kol bir konumda durur. */
+            if (input_pressed(0, PAD_TRIANGLE)) {
+                if (plane.spoiler_target < 0.01f)
+                    plane.spoiler_target = 0.5f;
+                else if (plane.spoiler_target < 0.51f)
+                    plane.spoiler_target = 1.0f;
+                else
+                    plane.spoiler_target = 0.0f;
             }
+
+            /* Yerde tam hava freni ayni zamanda tekerlek frenidir. */
+            plane.brakes = (plane.on_ground && plane.spoiler > 0.5f);
 
             /* CARPI: inis takimi ac/kapa */
             if (input_pressed(0, PAD_CROSS))
@@ -281,9 +288,15 @@ int main(int argc, const char *argv[])
             /* Serbest kamera kendi icinde yalnizca deniz seviyesini biliyor;
              * pist yuzeyini ve ucagi da hesaba katmasi icin ayni engel
              * kontrolunden gecirilir. */
-            flightcam_clamp(&cam, plane.pos, aircraft_bound_radius(),
-                            flightcam_ground_at(&plane, cam.pos[0],
-                                                cam.pos[2]));
+            {
+                float g_cam = flightcam_ground_at(&plane, cam.pos[0],
+                                                  cam.pos[2]);
+                float g_pl = flightcam_ground_at(&plane, plane.pos[0],
+                                                 plane.pos[2]);
+
+                flightcam_clamp(&cam, plane.pos, aircraft_bound_radius(),
+                                (g_cam > g_pl) ? g_cam : g_pl);
+            }
         } else {
             flightcam_update(&cam, cam_mode, &plane, DT);
         }
@@ -348,14 +361,6 @@ int main(int argc, const char *argv[])
 
         /* Olcumu periyodik olarak kayda da yaz: gercek PS3'te ekrani
          * okumak zor, kayit FTP ile alinabiliyor. */
-        /* Teshis: sabit karelerde ekran goruntusu al */
-        if (frames == 240 || frames == 900) {
-            char shot[64];
-
-            snprintf(shot, sizeof(shot), "/dev_hdd0/tmp/shot%lu.ppm", frames);
-            ps3log("ekran goruntusu %s -> %d", shot, rsx3d_capture(shot));
-        }
-
         if (frames % 600 == 0 && frames > 0)
             ps3log("kare %.2f ms (%.0f fps) | flight %.2f model %.2f "
                    "scene %.2f runway %.2f plane %.2f hud %.2f flip %.2f "

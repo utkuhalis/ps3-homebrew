@@ -35,8 +35,10 @@ Control authority scales with dynamic pressure — a parked aircraft ignores the
 stick.
 
 **Aircraft** — every moving surface is a separate part: flaps, ailerons,
-spoilers, rudder, landing gear with doors, engine fans, cabin doors. They
-deflect with your input and the wheels spin with ground speed.
+spoilers, rudder, landing gear with doors, engine fans, cabin doors. Surfaces
+travel to the commanded position at their own rate rather than snapping to it:
+flaps take about fifteen seconds to run out, speedbrakes about two. The wheels
+spin with ground speed.
 
 ![Aircraft](docs/aircraft-views.png)
 
@@ -73,7 +75,7 @@ detached free camera.
 | Throttle up | R2 or R1 | T or E |
 | Throttle down | L2 or L1 | R or Q |
 | Flap notch | Square | Z |
-| Spoiler + brakes | Triangle (hold) | V |
+| Speedbrake lever (half / full / in) | Triangle | V |
 | Landing gear | Cross | X |
 | Camera mode | Circle | C |
 | Autopilot | R3 | G |

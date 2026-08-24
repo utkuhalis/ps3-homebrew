@@ -370,6 +370,58 @@ static void test_pist_yaninda_su(void)
     CHECK(f.pos[1] < DECK_Y, "pist yaninda deniz seviyesine iniyor");
 }
 
+/* Kumanda yuzeyleri hedefe ANINDA atlamamali: kol kademeye alinir,
+ * yuzeyler oraya motor hiziyla ilerler. */
+static void test_yuzey_animasyonu(void)
+{
+    Flight f;
+    float rw[2] = { 0.0f, 0.0f };
+    int i;
+    float onceki;
+
+    printf("test: flap ve hava freni hedefe yavasca ilerliyor\n");
+
+    flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
+
+    /* flap kolunu tam acik kademeye al */
+    f.flap = 0.0f;
+    f.flap_target = 1.0f;
+    flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.flap > 0.0f, "flap harekete basladi");
+    CHECK(f.flap < 0.05f, "flap tek karede hedefe atlamiyor");
+
+    /* birkac saniyede ilerlemeli ama hemen bitmemeli */
+    for (i = 0; i < 60 * 3; i++)
+        flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.flap > 0.15f && f.flap < 0.95f,
+          "flap birkac saniyede yolun bir kisminda");
+
+    /* yeterli sure sonra hedefe oturmali ve orada KALMALI */
+    for (i = 0; i < 60 * 20; i++)
+        flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.flap > 0.99f, "flap sonunda hedefe ulasiyor");
+    onceki = f.flap;
+    for (i = 0; i < 60; i++)
+        flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.flap == onceki, "hedefe varinca duruyor, salinmiyor");
+
+    /* hava freni daha hizli ama yine de anlik degil */
+    f.spoiler = 0.0f;
+    f.spoiler_target = 1.0f;
+    flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.spoiler > 0.0f && f.spoiler < 0.2f,
+          "hava freni de kademeli aciliyor");
+
+    for (i = 0; i < 60 * 4; i++)
+        flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.spoiler > 0.99f, "hava freni birkac saniyede tam aciliyor");
+
+    /* geri kapanma da kademeli */
+    f.spoiler_target = 0.0f;
+    flight_update(&f, 1.0f / 60.0f);
+    CHECK(f.spoiler > 0.8f, "kapanma da anlik degil");
+}
+
 int main(void)
 {
     test_pistte_basliyor();
@@ -380,6 +432,7 @@ int main(void)
     test_gercek_stall_calisiyor();
     test_pist_dikdortgen_collider();
     test_pist_yaninda_su();
+    test_yuzey_animasyonu();
     test_tasima_hizla_artiyor();
     test_stall();
     test_flap_kritik_aciyi_artiriyor();

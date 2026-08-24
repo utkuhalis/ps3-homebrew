@@ -226,13 +226,19 @@ void hud_draw_controls(const Flight *f)
     font_draw_text(28, y + 14, 2, "THROTTLE", COL_LABEL);
     font_draw_text(184, y + 14, 2, buf, COL_VALUE);
 
-    snprintf(buf, sizeof(buf), "%d", (int)(f->flap * 3.0f + 0.5f));
+    /* Hedef kademe ile gercek konum farkliysa yuzeyler hareket halindedir;
+     * bunu ok ile gostermek pilota geri bildirim verir. */
+    snprintf(buf, sizeof(buf), "%d%s", (int)(f->flap_target * 3.0f + 0.5f),
+             (f->flap < f->flap_target - 0.02f) ? " v" :
+             ((f->flap > f->flap_target + 0.02f) ? " ^" : ""));
     font_draw_text(28, y + 42, 2, "FLAPS", COL_LABEL);
     font_draw_text(184, y + 42, 2, buf, f->flap > 0.01f ? on : off);
 
     font_draw_text(28, y + 70, 2, "SPOILER", COL_LABEL);
-    font_draw_text(184, y + 70, 2, f->spoiler > 0.5f ? "OUT" : "IN",
-                   f->spoiler > 0.5f ? on : off);
+    font_draw_text(184, y + 70, 2,
+                   f->spoiler_target > 0.51f ? "FULL" :
+                   (f->spoiler_target > 0.01f ? "HALF" : "IN"),
+                   f->spoiler > 0.05f ? on : off);
 
     font_draw_text(28, y + 96, 2, "GEAR", COL_LABEL);
     font_draw_text(184, y + 96, 2, f->gear_down ? "DOWN" : "UP",

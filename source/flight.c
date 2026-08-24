@@ -210,6 +210,7 @@ void flight_init_on_runway(Flight *f, const float runway_xz[2], float heading,
     f->gear_down = 1;
     f->gear_pos = 1.0f;
     f->flap = 0.34f;            /* kalkis icin bir kademe flap */
+    f->flap_target = 0.34f;
     f->on_ground = 1;
     f->airborne = 0;
 
@@ -457,6 +458,27 @@ void flight_update(Flight *f, float dt)
     for (i = 0; i < 3; i++) {
         f->vel[i] += acc[i] * dt;
         f->pos[i] += f->vel[i] * dt;
+    }
+
+    /* --- kumanda yuzeyi animasyonu ---
+     * Yuzeyler hedefe sabit hizla ilerler; ani sicrama yok. */
+    {
+        float d = f->flap_target - f->flap;
+        float step = FLAP_RATE * dt;
+
+        if (d > step)       f->flap += step;
+        else if (d < -step) f->flap -= step;
+        else                f->flap = f->flap_target;
+
+        d = f->spoiler_target - f->spoiler;
+        step = SPOILER_RATE * dt;
+
+        if (d > step)       f->spoiler += step;
+        else if (d < -step) f->spoiler -= step;
+        else                f->spoiler = f->spoiler_target;
+
+        f->flap = clampf(f->flap, 0.0f, 1.0f);
+        f->spoiler = clampf(f->spoiler, 0.0f, 1.0f);
     }
 
     /* --- tekerlek animasyonu --- */
