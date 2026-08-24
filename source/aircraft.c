@@ -9,6 +9,7 @@
 #include "rsx3d.h"
 #include "mesh.h"
 #include "profiler.h"
+#include "ps3log.h"
 
 #include "aircraft_vpo.h"
 #include "aircraft_fpo.h"
@@ -254,6 +255,8 @@ int aircraft_init(void)
     c_suncol = rsxFragmentProgramGetConst(fp, "sunColor");
     c_zen    = rsxFragmentProgramGetConst(fp, "zenithCol");
 
+    /* Shader uniform'lari bulunamazsa ilgili terim sifir kalir ve govde
+     * kararir; hangisinin eksik oldugu kayittan gorulsun. */
     loaded = 1;
     return 0;
 }

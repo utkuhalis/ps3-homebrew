@@ -22,7 +22,10 @@
 
 /* Pist yuzeyi ve yer teması */
 #define DECK_Y               9.0f   /* pist platformunun yuzeyi */
-#define GEAR_HEIGHT          3.9f   /* tekerlekler acikken govde yuksekligi */
+/* Model orijini tekerleklerin altinda (olculdu: en alt nokta Y=0.01), yani
+ * govdeyi ayrica yukseltmeye gerek yok. 3.9 iken ucak pistin 4 metre
+ * uzerinde asili duruyordu. */
+#define GEAR_HEIGHT          0.05f   /* tekerlekler acikken govde yuksekligi */
 #define ROLL_FRICTION        0.030f /* tekerlek surtunmesi */
 #define BRAKE_FRICTION       0.240f /* fren (spoiler ile birlikte) */
 #define ROTATE_SPEED_MS     75.0f   /* bu hizin uzerinde burun kalkabilir */
