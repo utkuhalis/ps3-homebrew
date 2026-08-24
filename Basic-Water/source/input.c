@@ -227,6 +227,39 @@ float input_axis_right_x(void)
     return axis_or(axis_rx, d);
 }
 
+/* --- ucus: sag analog, yedegi yon tuslari --- */
+float input_flight_pitch(void)
+{
+    float d = 0.0f;
+
+    if (input_held(0, PAD_UP))   d =  1.0f;   /* burun yukari */
+    if (input_held(0, PAD_DOWN)) d = -1.0f;
+
+    /* Eksen yukari itildiginde ham deger negatif gelir; burun yukari
+     * pozitif olacak sekilde cevrilir. */
+    return axis_or(-axis_ry, d);
+}
+
+float input_flight_roll(void)
+{
+    float d = 0.0f;
+
+    if (input_held(0, PAD_LEFT))  d = -1.0f;
+    if (input_held(0, PAD_RIGHT)) d =  1.0f;
+    return axis_or(axis_rx, d);
+}
+
+/* --- kamera: sol analog, yedegi yok (yon tuslari ucusta kullaniliyor) --- */
+float input_cam_x(void)
+{
+    return axis_lx;
+}
+
+float input_cam_y(void)
+{
+    return axis_ly;
+}
+
 float input_axis_right_y(void)
 {
     float d = 0.0f;

@@ -208,7 +208,7 @@ void hud_draw_help(const Flight *f)
     } else {
         font_draw_center(640, y + 12, 2, "ROTATE", RGB(140, 240, 160));
         font_draw_center(640, y + 38, 1,
-                         "pull back on the stick", RGB(170, 180, 195));
+                         "pull back on the right stick", RGB(170, 180, 195));
     }
 }
 

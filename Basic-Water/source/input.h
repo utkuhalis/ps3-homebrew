@@ -37,6 +37,22 @@ int  input_dir(int pad);
 /* Analog eksenler, -1.0 .. +1.0. Olu bolge uygulanmistir.
  * Y ekseni ASAGI pozitiftir (kol donanimiyla ayni yon).
  * Analog verisi gelmiyorsa (RPCS3 klavye modu) d-pad bunlari surer. */
+/* --- anlam odakli kumanda okumalari ---
+ *
+ * Ucus SAG analogdan, kamera SOL analogdan surulur. Ham eksen
+ * fonksiyonlarini dogrudan cagirmak yerine bunlari kullanmak, hangi cubugun
+ * neyi yaptigini tek yerde tutar; ikisi bir kez birbirine karismisti.
+ *
+ * Ucus kumandasinda yon tuslari yedek olarak calisir: emulatorun klavye
+ * eslemesinde sag analog Home/End/PageDown gibi tuslara dusuyor ve oyun
+ * oynanamaz hale geliyor. */
+float input_flight_pitch(void);   /* + burun yukari */
+float input_flight_roll(void);    /* + saga yatis */
+
+/* Yorunge kamerasi: sol analog */
+float input_cam_x(void);
+float input_cam_y(void);
+
 float input_axis_left_x(void);
 float input_axis_left_y(void);
 /* Menu acikken bakis tus yedegi kapatilir (onay tusuyla cakismasin) */

@@ -154,9 +154,9 @@ void gamemenu_draw(const GameMenu *m)
                      "D-pad: select   Left/Right: change   SELECT: close",
                      COL_HINT);
     font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + PANEL_H - 34, 1,
-                     "FLIGHT:  R1/R2 throttle   Square flaps   Triangle spoiler",
+                     "Right stick: fly    Left stick: orbit camera",
                      COL_HINT);
     font_draw_center(PANEL_X + PANEL_W / 2, PANEL_Y + PANEL_H - 18, 1,
-                     "Cross gear   Circle camera   R3 autopilot",
+                     "R1/R2 throttle  Square flaps  Triangle spoiler  Cross gear",
                      COL_HINT);
 }

@@ -46,7 +46,8 @@ steps; you run one command.
 
 | Action | Pad | Keyboard (RPCS3 default) |
 |---|---|---|
-| Pitch / roll | Left stick (or D-pad) | W A S D / arrow keys |
+| **Fly** (pitch / roll) | **Right stick** (or D-pad) | arrow keys |
+| **Orbit camera** | **Left stick** | W A S D |
 | Throttle up | R2 or R1 | T or E |
 | Throttle down | L2 or L1 | R or Q |
 | Flap notch | Square | Z |
@@ -69,9 +70,9 @@ speed, then pull back. The strip disappears once you are airborne.
 ## Flight model
 
 Not a full aerodynamic simulation, but built on the same quantities a real one
-uses, and tuned to the numbers of a light business jet:
+uses, and tuned to the numbers of a Boeing 737-800:
 
-- Thrust-to-weight 0.52, wing area 28 m², empty mass 3800 kg
+- 41 t empty, 18 t fuel, 235 kN thrust, 125 m² wing, rotation at 75 m/s
 - Lift and drag from dynamic pressure and angle of attack, with stall in
   **both** directions and lift decaying to zero past 60°
 - Angle of attack is computed in body axes, so sideslip does not contaminate
@@ -84,20 +85,34 @@ uses, and tuned to the numbers of a light business jet:
   the stick
 - Trim stability: the nose settles at the angle of attack that carries the
   aircraft's weight, so it flies straight hands-off
-- G-loading with structural limits (+3.2 / −1.6)
+- **Body rates are converted to Euler rates properly**: in a bank, part of a
+  pitch input becomes yaw, which is what actually turns an aircraft. Adding
+  body rates straight to the Euler angles only works in level flight, and at
+  airliner mass it drove the nose down into a stall on every turn
+- Coordinated turn rate is g·tan(bank)/V, so it depends on speed
+- Trim accounts for bank: lift's vertical component falls by cos(bank), so the
+  aircraft trims to a higher angle of attack to hold altitude
+- G-loading with structural limits (+2.5 / −1.0)
 - Ground contact with rolling and braking friction, rotation-speed gate, and
   much heavier drag on water
 
 ## Aircraft model
 
-A real glTF asset (`assets/model/plane.glb`, 60k triangles) converted to a flat
-binary at build time by `tools/glb_to_mesh.py` — pure Python, no dependencies.
+Models are converted to a flat binary at build time by `tools/glb_to_mesh.py` —
+pure Python, no dependencies. Every moving surface is its own part, and the
+engine recognises them by name prefix, because real models split one surface
+across several panels (`flap_left01..04`, `spoiler_right01..06`) that all move
+together.
 
-Control surfaces are separated into their own meshes by
-`tools/blender/split_surfaces.py`, which runs in headless Blender (no add-on
-required). The wing is swept, so the trailing edge is cut with a matching
-slanted plane. Flaps, ailerons and the rudder then rotate about hinges derived
-from their own geometry.
+The in-repo default is `assets/model/jet.glb`, generated parametrically by
+`tools/blender/build_aircraft.py` in headless Blender: 25 parts, 4280
+triangles, ends capped so no surface faces inward, UVs unwrapped per part.
+It exists so the project builds for anyone, with no third-party asset.
+
+`build.sh` prefers `assets/model/boeing737.glb` when present. That one is
+imported from a commercial asset pack by `tools/blender/import_737.py` and is
+**gitignored** — usable in a local build and embedded in the compiled package,
+but not redistributed as source.
 
 ## Testing without a PS3
 
@@ -113,6 +128,10 @@ be pure is pure and tested on the host:
 | `test_atmosphere` | weather and time-of-day combinations |
 | `test_menu` | menu state machine |
 | `test_mesh` | model file parsing against the real data file |
+
+The mesh test has caught the same class of bug twice: the part limit was too
+low (16, then 40) and `mesh_load` silently rejected the whole model. Both times
+it failed on the host instead of shipping a game that would not start.
 
 `build.sh test` also greps the source for two regressions that once shipped:
 flight state being reset inside the main loop, and controls not being bound.

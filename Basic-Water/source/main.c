@@ -194,8 +194,8 @@ int main(int argc, const char *argv[])
 
         /* --- ucus kumandalari (menu kapaliyken) --- */
         if (!menu.open) {
-            float stick_p = -input_axis_left_y();
-            float stick_r =  input_axis_left_x();
+            float stick_p = input_flight_pitch();
+            float stick_r = input_flight_roll();
 
             /* R3: otopilot ac/kapa. Kumandaya dokunmak da otopilotu birakir -
              * gercek ucakta oldugu gibi pilot her an devralabilir. */
@@ -247,11 +247,11 @@ int main(int argc, const char *argv[])
                 flightcam_orbit_reset();
             }
 
-            /* Sag analog: takip modunda ucagin cevresinde don.
+            /* Sol analog: takip modunda ucagin cevresinde don.
              * Kokpit ve serbest modda kendi islevini korur. */
             if (cam_mode == CAM_CHASE) {
-                float ox = input_axis_right_x();
-                float oy = input_axis_right_y();
+                float ox = input_cam_x();
+                float oy = input_cam_y();
                 /* Yakinlasma L3'te: yon tuslari zaten burun kumandasinin
                  * yedegi, ikisini ayni tusa baglamak catisirdi. */
                 float zoom = input_held(0, PAD_L3) ? -1.0f : 0.0f;
