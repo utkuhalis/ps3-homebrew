@@ -90,14 +90,14 @@ static void test_yakit_ve_agirlik(void)
     ilk_agirlik = f.mass_kg;
     f.throttle = 1.0f;
 
-    for (i = 0; i < 600; i++)
+    for (i = 0; i < 12000; i++)
         flight_update(&f, 1.0f / 60.0f);
 
     CHECK(f.fuel_kg < FUEL_FULL_KG, "yakit azaldi");
     CHECK(f.mass_kg < ilk_agirlik, "agirlik azaldi");
 
     /* yakiti tamamen bitir */
-    for (i = 0; i < 200000 && f.fuel_kg > 0.0f; i++)
+    for (i = 0; i < 900000 && f.fuel_kg > 0.0f; i++)
         flight_update(&f, 1.0f / 60.0f);
 
     CHECK(f.fuel_kg == 0.0f, "yakit bitti");
@@ -250,9 +250,9 @@ static void test_donuste_sahte_stall_yok(void)
 
     printf("test: duz ucus ve donuste sahte stall cikmiyor\n");
 
-    pos[0] = 0.0f; pos[1] = 800.0f; pos[2] = 0.0f;
+    pos[0] = 0.0f; pos[1] = 3000.0f; pos[2] = 0.0f;
     flight_init(&f, pos, 0.0f);
-    f.throttle = 0.75f;
+    f.throttle = 0.80f;
 
     /* once duz ucusta dengelensin */
     for (i = 0; i < 60 * 10; i++)
@@ -264,7 +264,7 @@ static void test_donuste_sahte_stall_yok(void)
     for (i = 0; i < 60 * 30; i++) {
         float bank_target = 0.45f;
 
-        f.in_roll  = (bank_target - f.roll) * 3.0f - f.r_rate * 1.5f;
+        f.in_roll  = (bank_target - f.roll) * 6.0f - f.r_rate * 3.0f;
         if (f.in_roll >  1.0f) f.in_roll =  1.0f;
         if (f.in_roll < -1.0f) f.in_roll = -1.0f;
 
@@ -272,10 +272,10 @@ static void test_donuste_sahte_stall_yok(void)
          * tirmandirip hiz kaybettiriyor ve sonunda dikleştiriyordu - gercek
          * pilot da irtifayi tutar, komutu sabit birakmaz. */
         {
-            float alt_err = 800.0f - f.pos[1];
+            float alt_err = 3000.0f - f.pos[1];
             float vs = f.vel[1];
 
-            f.in_pitch = alt_err * 0.006f - vs * 0.13f - f.p_rate * 1.4f;
+            f.in_pitch = alt_err * 0.004f - vs * 0.16f - f.p_rate * 2.6f;
             if (f.in_pitch >  1.0f) f.in_pitch =  1.0f;
             if (f.in_pitch < -1.0f) f.in_pitch = -1.0f;
         }
@@ -290,8 +290,8 @@ static void test_donuste_sahte_stall_yok(void)
     printf("       donusteki en yuksek hucum acisi %.3f rad, stall %d kare\n",
            max_aoa, stall_frames);
     CHECK(stall_frames == 0, "koordineli donuste stall uyarisi cikmiyor");
-    CHECK(f.airspeed > 40.0f, "donuste ucak hizini koruyor");
-    CHECK(f.pos[1] > 300.0f, "donuste ucak dusmuyor");
+    CHECK(f.airspeed > 120.0f, "donuste ucak hizini koruyor");
+    CHECK(f.pos[1] > 2000.0f, "donuste ucak dusmuyor");
 }
 
 /* Gercek stall hala calismali: burun asiri kaldirilirsa uyari cikmali */
@@ -304,7 +304,7 @@ static void test_gercek_stall_calisiyor(void)
 
     printf("test: burun asiri kaldirilinca gercek stall oluyor\n");
 
-    pos[0] = 0.0f; pos[1] = 900.0f; pos[2] = 0.0f;
+    pos[0] = 0.0f; pos[1] = 4000.0f; pos[2] = 0.0f;
     flight_init(&f, pos, 0.0f);
     f.throttle = 0.0f;              /* gaz kesik: hiz duser */
 

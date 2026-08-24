@@ -15,14 +15,14 @@
 /* Tam girdide donme hizlari (radyan/saniye). Ilk degerler (1.25 / 2.10)
  * saniyede 71 ve 120 derece ediyordu; ucak ucaktan cok oyuncak gibi
  * donuyordu. Bir is jeti icin 30-50 derece/saniye gercekci. */
-#define PITCH_RATE       0.62f
-#define ROLL_RATE        1.55f
-#define YAW_RATE         0.42f
+#define PITCH_RATE       0.34f
+#define ROLL_RATE        0.85f
+#define YAW_RATE         0.26f
 
 /* Statik kararlilik: burun kendiliginden hava akisi yonune doner.
  * Gercek ucagi "kendi ucan" bir sey yapan sey budur. */
 #define PITCH_STABILITY  0.85f
-#define FUEL_BURN_KGS    0.55f   /* tam gazda saniyede yanan yakit */
+#define FUEL_BURN_KGS    2.20f   /* 737 tam gazda ~2.2 kg/s */
 
 static float clampf(float v, float lo, float hi)
 {
@@ -241,9 +241,10 @@ void flight_init(Flight *f, const float start_pos[3], float start_yaw)
     {
         float fwd[3];
         forward_vec(f, fwd);
-        f->vel[0] = fwd[0] * 70.0f;
-        f->vel[1] = fwd[1] * 70.0f;
-        f->vel[2] = fwd[2] * 70.0f;
+        /* 737 seyir hizina yakin baslangic; 70 m/s bu govde icin stall alti */
+        f->vel[0] = fwd[0] * 190.0f;
+        f->vel[1] = fwd[1] * 190.0f;
+        f->vel[2] = fwd[2] * 190.0f;
     }
 }
 

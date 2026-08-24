@@ -151,14 +151,16 @@ fi
 # 0) Ucak modeli: glTF -> gomulebilir ikili. Kaynak model daha yeniyse
 #    yeniden uretilir. Saf Python, ek bagimlilik yok.
 # Kendi urettigimiz model oncelikli (tools/blender/build_aircraft.py).
-MODEL_SRC=assets/model/jet.glb
+MODEL_SRC=assets/model/boeing737.glb
+[ -f "$MODEL_SRC" ] || MODEL_SRC=assets/model/jet.glb
 [ -f "$MODEL_SRC" ] || MODEL_SRC=assets/model/plane_split.glb
 [ -f "$MODEL_SRC" ] || MODEL_SRC=assets/model/plane.glb
 if [ -f "$MODEL_SRC" ]; then
     if [ ! -f data/plane.bin ] || [ "$MODEL_SRC" -nt data/plane.bin ]; then
         echo ">>> Ucak modeli donusturuluyor"
         mkdir -p data
-        if [ "$MODEL_SRC" = "assets/model/jet.glb" ]; then
+        if [ "$MODEL_SRC" = "assets/model/boeing737.glb" ] \
+           || [ "$MODEL_SRC" = "assets/model/jet.glb" ]; then
             $PS3_RUN python3 tools/glb_to_mesh.py "$MODEL_SRC" data/plane.bin
         else
             $PS3_RUN python3 tools/glb_to_mesh.py "$MODEL_SRC" data/plane.bin \

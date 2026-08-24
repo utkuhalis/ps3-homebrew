@@ -6,12 +6,15 @@
  * Donanim bagimsizdir (birim testli). Gercek aerodinamik degil, oyun icin
  * sadelestirilmis bir modeldir; ucak gibi hissettirmeyi hedefler. */
 
-#define EMPTY_MASS_KG    3800.0f
-#define FUEL_FULL_KG      900.0f
+/* Boeing 737-800 degerleri. Model gercek olcusunde (39.4 m uzunluk,
+ * 34.8 m aciklik) oldugu icin fizik de ona uymali; 4.7 tonluk is jeti
+ * sabitleriyle 70 tonluk bir govde oyuncak gibi ucuyordu. */
+#define EMPTY_MASS_KG   41000.0f    /* isletme bos agirligi */
+#define FUEL_FULL_KG    18000.0f
 /* Itki: 4700 kg'lik bir is jeti icin T/W ~ 0.45. Ilk degerde (42 kN) oran
  * 0.91 idi - savas ucagi seviyesi; ucak oyuncak gibi firliyordu. */
-#define MAX_THRUST_N    24000.0f
-#define WING_AREA_M2       28.0f
+#define MAX_THRUST_N   235000.0f    /* 2 x 117 kN */
+#define WING_AREA_M2      125.0f
 #define GRAVITY             9.81f
 
 #define STALL_ANGLE_RAD     0.28f   /* ~16 derece */
@@ -19,31 +22,31 @@
 
 /* Pist yuzeyi ve yer teması */
 #define DECK_Y               9.0f   /* pist platformunun yuzeyi */
-#define GEAR_HEIGHT          1.6f   /* tekerlekler acikken govde yuksekligi */
+#define GEAR_HEIGHT          3.9f   /* tekerlekler acikken govde yuksekligi */
 #define ROLL_FRICTION        0.030f /* tekerlek surtunmesi */
 #define BRAKE_FRICTION       0.240f /* fren (spoiler ile birlikte) */
-#define ROTATE_SPEED_MS     58.0f   /* bu hizin uzerinde burun kalkabilir */
+#define ROTATE_SPEED_MS     75.0f   /* bu hizin uzerinde burun kalkabilir */
 
 /* Acisal atalet: kumanda bir MOMENT uretir, ucak ona ivmelenerek uyar.
  * Once girdi dogrudan aciyi degistiriyordu; ucak kagit gibi aninda donuyor,
  * kumanda birakilinca aninda duruyordu. Bu zaman sabitleri ucagin agirlik
  * hissini belirler: buyudukce ucak agirlasir. */
-#define PITCH_INERTIA_S   1.15f
-#define ROLL_INERTIA_S    0.55f
-#define YAW_INERTIA_S     1.60f
+#define PITCH_INERTIA_S   2.30f
+#define ROLL_INERTIA_S    1.15f
+#define YAW_INERTIA_S     2.80f
 
 /* Manevra sirasinda tasima artar, indüklenen surukleme de artar: sert
  * donuste ucak hiz kaybeder. */
-#define G_LIMIT           3.2f
-#define G_NEG_LIMIT       1.6f   /* ters yonde yapisal sinir daha dusuktur */
+#define G_LIMIT           2.5f    /* yolcu ucagi yapisal siniri */
+#define G_NEG_LIMIT       1.0f   /* ters yonde yapisal sinir daha dusuktur */
 #define WATER_DRAG        1.35f  /* su yuzeyinde surtunme katsayisi */
 
 /* Kumanda etkinligi dinamik basincla artar: bu hizin altinda kumandalar
  * agirlasir, ustunde tam etkilidir. Gercek ucakta oldugu gibi durur ucakta
  * yon degistirmek imkansizdir. */
-#define CONTROL_REF_MS      85.0f
+#define CONTROL_REF_MS     125.0f
 #define GEAR_DRAG            0.055f
-#define WHEEL_RADIUS_M       0.42f  /* tekerlek yaricapi (donme animasyonu) */
+#define WHEEL_RADIUS_M       0.55f  /* tekerlek yaricapi (donme animasyonu) */
 
 /* Pist yuzeyi olculeri (runway.h ile ayni olmali). Ucus modulu cizim
  * modulune bagimli olmasin diye burada tekrar tanimlanir; test bu ikisinin

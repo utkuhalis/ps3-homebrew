@@ -68,7 +68,7 @@ static void aim_point(const Flight *f, float out[3])
 
     local[0] = 0.0f;
     local[1] = 0.6f;
-    local[2] = -1.2f;           /* govde merkezine yakin: yorungede donerken
+    local[2] = -3.0f;           /* govde merkezine yakin: yorungede donerken
                                  * ucak kadrajin ortasinda kalir */
     mount_point(f, local, out);
 }
@@ -77,12 +77,12 @@ static void aim_point(const Flight *f, float out[3])
  * Kamera, ucagin cevresinde kuresel koordinatlarla konumlanir. */
 #define ORBIT_PITCH_MIN  (-0.35f)
 #define ORBIT_PITCH_MAX   ( 1.15f)
-#define ORBIT_DIST_MIN     6.0f
-#define ORBIT_DIST_MAX    70.0f
+#define ORBIT_DIST_MIN    18.0f
+#define ORBIT_DIST_MAX   160.0f
 
 static float orbit_yaw = 0.0f;      /* 0 = tam arkadan */
 static float orbit_pitch = 0.22f;   /* + yukaridan bakar */
-static float orbit_dist = 16.0f;
+static float orbit_dist = 48.0f;
 
 void flightcam_orbit(float dyaw, float dpitch, float dzoom, float dt)
 {
@@ -103,7 +103,7 @@ void flightcam_orbit_reset(void)
 {
     orbit_yaw = 0.0f;
     orbit_pitch = 0.22f;
-    orbit_dist = 16.0f;
+    orbit_dist = 48.0f;
 }
 
 int flightcam_orbit_active(void)
@@ -119,13 +119,13 @@ static void mount_local(CamMode mode, float out[3])
 {
     switch (mode) {
     case CAM_LEFT_WING:
-        out[0] = -7.5f; out[1] = 1.2f; out[2] = 1.0f;
+        out[0] = -19.0f; out[1] = 2.0f; out[2] = 2.0f;
         break;
     case CAM_RIGHT_WING:
-        out[0] =  7.5f; out[1] = 1.2f; out[2] = 1.0f;
+        out[0] =  19.0f; out[1] = 2.0f; out[2] = 2.0f;
         break;
     case CAM_TAIL:
-        out[0] = 0.0f;  out[1] = 5.0f; out[2] = 30.0f;
+        out[0] = 0.0f;  out[1] = 12.0f; out[2] = 85.0f;
         break;
     case CAM_CHASE:
     default:

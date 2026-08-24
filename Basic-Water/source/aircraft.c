@@ -54,18 +54,21 @@ typedef struct {
 
 static PartInfo part_info[MESH_MAX_PARTS];
 
+/* Parca turu ONEK ile taninir: gercek ucak modellerinde ayni yuzey birden
+ * cok panele bolunmus oluyor (flap_left01..04, spoiler_right01..06) ve hepsi
+ * ayni kumanda girdisiyle hareket eder. */
 static SurfaceKind kind_of(const char *name)
 {
-    if (strcmp(name, "flap_left") == 0)     return SURF_FLAP_L;
-    if (strcmp(name, "flap_right") == 0)    return SURF_FLAP_R;
-    if (strcmp(name, "aileron_left") == 0)  return SURF_AIL_L;
-    if (strcmp(name, "aileron_right") == 0) return SURF_AIL_R;
-    if (strcmp(name, "rudder") == 0)        return SURF_RUDDER;
-    if (strcmp(name, "elevator_left") == 0)  return SURF_ELEV_L;
-    if (strcmp(name, "elevator_right") == 0) return SURF_ELEV_R;
-    if (strcmp(name, "spoiler_left") == 0)   return SURF_SPOIL_L;
-    if (strcmp(name, "spoiler_right") == 0)  return SURF_SPOIL_R;
-    if (strncmp(name, "wheel_", 6) == 0)    return SURF_WHEEL;
+    if (strncmp(name, "flap_left", 9) == 0)      return SURF_FLAP_L;
+    if (strncmp(name, "flap_right", 10) == 0)    return SURF_FLAP_R;
+    if (strncmp(name, "aileron_left", 12) == 0)  return SURF_AIL_L;
+    if (strncmp(name, "aileron_right", 13) == 0) return SURF_AIL_R;
+    if (strncmp(name, "rudder", 6) == 0)         return SURF_RUDDER;
+    if (strncmp(name, "elevator_left", 13) == 0)  return SURF_ELEV_L;
+    if (strncmp(name, "elevator_right", 14) == 0) return SURF_ELEV_R;
+    if (strncmp(name, "spoiler_left", 12) == 0)   return SURF_SPOIL_L;
+    if (strncmp(name, "spoiler_right", 13) == 0)  return SURF_SPOIL_R;
+    if (strncmp(name, "wheel_", 6) == 0)         return SURF_WHEEL;
     return SURF_FIXED;
 }
 
@@ -112,7 +115,7 @@ static float      cam_dist2 = 0.0f;
 static unsigned int drawn_tris = 0;
 
 /* Bu mesafenin otesinde yalnizca govde cizilir (birim kare) */
-#define LOD_SMALL_PARTS_DIST2  (170.0f * 170.0f)
+#define LOD_SMALL_PARTS_DIST2  (320.0f * 320.0f)
 static int        loaded = 0;
 
 static rsxVertexProgram   *vp = (rsxVertexProgram *)solid_vpo;
@@ -135,13 +138,13 @@ static void aircraft_body_to_world(const Flight *f, const float in[3],
 
 void aircraft_cockpit_pos(const Flight *f, float out[3])
 {
-    V(local, 0.0f, 0.8f, -3.4f);
+    V(local, 0.0f, 1.6f, -16.0f);   /* 737 kokpiti burna yakin */
     aircraft_body_to_world(f, local, out);
 }
 
 void aircraft_chase_pos(const Flight *f, float out[3])
 {
-    V(local, 0.0f, 3.4f, 15.0f);
+    V(local, 0.0f, 8.0f, 48.0f);
     aircraft_body_to_world(f, local, out);
 }
 
@@ -417,7 +420,8 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
          * Parca adi "gear"/"wheel" ile baslayanlar takim grubudur. */
         if (f->gear_pos < 0.02f
             && (strncmp(model.part[p].name, "gear", 4) == 0
-                || strncmp(model.part[p].name, "wheel", 5) == 0))
+                || strncmp(model.part[p].name, "wheel", 5) == 0
+                || strncmp(model.part[p].name, "geardoor", 8) == 0))
             continue;
 
         /* Uzaktan bakildiginda YALNIZCA kucuk parcalar atlanir. Once govde
