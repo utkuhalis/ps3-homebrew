@@ -11,6 +11,21 @@
 
 #include "../source/mesh.h"
 
+/* Mesh verisi big-endian float tasir; PS3'un PPU'su bunu dogrudan okur ama
+ * host (x86/arm) little-endian oldugu icin ayni isaretciden okumak cop
+ * deger verir. Test tarafinda bayt sirasi cevrilerek okunur. */
+static float be_float(const float *p)
+{
+    unsigned char b[4];
+    unsigned char s[4];
+    float out;
+
+    memcpy(b, p, 4);
+    s[0] = b[3]; s[1] = b[2]; s[2] = b[1]; s[3] = b[0];
+    memcpy(&out, s, 4);
+    return out;
+}
+
 int main(void)
 {
     FILE *fp = fopen("data/plane.bin", "rb");
@@ -50,7 +65,7 @@ int main(void)
             unsigned int v;
 
             for (v = 0; v < m.part[p].vertex_count; v++) {
-                float mt = m.part[p].verts[v * MESH_VERTEX_FLOATS + 9];
+                float mt = be_float(&m.part[p].verts[v * MESH_VERTEX_FLOATS + 9]);
 
                 if (!(mt >= -0.01f && mt <= 1.01f))
                     bad++;
