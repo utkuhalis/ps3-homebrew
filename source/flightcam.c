@@ -75,6 +75,10 @@ static void aim_point(const Flight *f, float out[3])
 
 /* --- yorunge (orbit) durumu ---
  * Kamera, ucagin cevresinde kuresel koordinatlarla konumlanir. */
+/* Kamera ile engel arasinda birakilan pay */
+#define CAM_SKIN               3.0f
+#define CAM_GROUND_CLEARANCE   1.5f
+
 #define ORBIT_PITCH_MIN  (-0.35f)
 #define ORBIT_PITCH_MAX   ( 1.15f)
 #define ORBIT_DIST_MIN    18.0f
@@ -141,6 +145,49 @@ static void mount_local(CamMode mode, float out[3])
     }
 }
 
+float flightcam_ground_at(const Flight *f, float wx, float wz)
+{
+    float dx = wx - f->ground_ref[0];
+    float dz = wz - f->ground_ref[2];
+
+    /* Pist dikdortgeninin uzerinde zemin pist yuzeyidir; disinda deniz. */
+    if (flight_over_runway(f, dx, dz))
+        return DECK_Y;
+    return WATER_SAFE_ALT;
+}
+
+void flightcam_clamp(Camera *cam, const float plane_pos[3],
+                     float plane_radius, float ground_y)
+{
+    float dx = cam->pos[0] - plane_pos[0];
+    float dy = cam->pos[1] - plane_pos[1];
+    float dz = cam->pos[2] - plane_pos[2];
+    float d2 = dx * dx + dy * dy + dz * dz;
+    float rmin = plane_radius + CAM_SKIN;
+
+    /* --- ucagin govdesine girme --- */
+    if (d2 < rmin * rmin) {
+        float d = sqrtf(d2);
+
+        if (d < 0.001f) {
+            /* Tam merkezde: gecerli bir yon yok, arkaya it. */
+            cam->pos[0] = plane_pos[0];
+            cam->pos[1] = plane_pos[1];
+            cam->pos[2] = plane_pos[2] + rmin;
+        } else {
+            float s = rmin / d;
+
+            cam->pos[0] = plane_pos[0] + dx * s;
+            cam->pos[1] = plane_pos[1] + dy * s;
+            cam->pos[2] = plane_pos[2] + dz * s;
+        }
+    }
+
+    /* --- zeminin altina inme --- */
+    if (cam->pos[1] < ground_y + CAM_GROUND_CLEARANCE)
+        cam->pos[1] = ground_y + CAM_GROUND_CLEARANCE;
+}
+
 void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
 {
     float local[3], eye[3], aim[3];
@@ -178,6 +225,11 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
         for (i = 0; i < 3; i++)
             cam->pos[i] += (eye[i] - cam->pos[i]) * k;
     }
+
+    /* Engeller: govde ve zemin. Kokpit modu bu kontrolden muaftir, cunku
+     * pilot zaten govdenin icinde oturur. */
+    flightcam_clamp(cam, f->pos, aircraft_bound_radius(),
+                    flightcam_ground_at(f, cam->pos[0], cam->pos[2]));
 
     /* Konum neresi olursa olsun kamera ucaga bakar: ucak her zaman
      * ekranin ortasinda kalir. */

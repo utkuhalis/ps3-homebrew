@@ -113,6 +113,7 @@ static u32        part_idx_base[MESH_MAX_PARTS];
 static int        body_part = -1;
 static float      cam_dist2 = 0.0f;
 static unsigned int drawn_tris = 0;
+static float bound_radius = 12.0f;
 
 /* Bu mesafenin otesinde yalnizca govde cizilir (birim kare) */
 #define LOD_SMALL_PARTS_DIST2  (320.0f * 320.0f)
@@ -187,6 +188,18 @@ int aircraft_init(void)
                 if (c < mn[k]) mn[k] = c;
                 if (c > mx[k]) mx[k] = c;
             }
+        }
+
+        /* Kameranin ucaga girmemesi icin gereken sinir yaricapi: govdenin
+         * en uzak noktasi. Modelden hesaplanir, cunku ucak degistiginde
+         * (13 m'lik jet, 39 m'lik 737) sabit bir deger yanlis olur. */
+        if (i == body_part) {
+            float rx = (mx[0] - mn[0]) * 0.5f;
+            float ry = (mx[1] - mn[1]) * 0.5f;
+            float rz = (mx[2] - mn[2]) * 0.5f;
+            float r2 = rx * rx + ry * ry + rz * rz;
+
+            bound_radius = sqrtf(r2);
         }
 
         part_info[i].hinge[0] = (mn[0] + mx[0]) * 0.5f;
@@ -461,6 +474,11 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
 unsigned int aircraft_triangle_count(void)
 {
     return loaded ? mesh_triangles(&model) : 0;
+}
+
+float aircraft_bound_radius(void)
+{
+    return bound_radius;
 }
 
 unsigned int aircraft_drawn_triangles(void)

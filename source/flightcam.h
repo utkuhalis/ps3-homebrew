@@ -39,6 +39,19 @@ int  flightcam_orbit_active(void);
 /* Ucus moduna gore kamerayi gunceller. dt yumusak takip icin gerekli. */
 void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt);
 
+/* Kamerayi engellere karsi iter.
+ *
+ * Iki kural: kamera ucagin govdesine giremez (sinir kuresinin disinda
+ * kalir) ve zeminin altina inemez (pist uzerindeyse pist yuzeyi, disinda
+ * ise deniz). Saf fonksiyon - birim testli.
+ *
+ * plane_radius: govdeyi kapsayan kure. ground_y: o noktadaki zemin. */
+void flightcam_clamp(Camera *cam, const float plane_pos[3],
+                     float plane_radius, float ground_y);
+
+/* Verilen dunya noktasinda zemin yuksekligi (pist yuzeyi ya da deniz) */
+float flightcam_ground_at(const Flight *f, float wx, float wz);
+
 /* Bir noktadan hedefe bakan yaw/pitch acilarini hesaplar.
  * Donanim bagimsiz - birim testli. */
 void flightcam_look_at(const float eye[3], const float target[3],

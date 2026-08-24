@@ -44,6 +44,7 @@ void overlay_disc(float a, float b, float c, unsigned int d, int e)
 { (void)a; (void)b; (void)c; (void)d; (void)e; }
 void font_draw_center(int a, int b, int c, const char *d, unsigned int e)
 { (void)a; (void)b; (void)c; (void)d; (void)e; }
+float aircraft_bound_radius(void) { return 21.0f; }
 void aircraft_cockpit_pos(const Flight *f, float out[3])
 { out[0] = f->pos[0]; out[1] = f->pos[1]; out[2] = f->pos[2]; }
 
@@ -213,8 +214,68 @@ int main(void)
         printf("test: yonelim matrisi body_to_world ile ayni\n");
     }
 
+    /* --- kamera carpismasi: govdeye ve zemine girmemeli --- */
+    {
+        Camera c;
+        float plane[3] = { 100.0f, 50.0f, -200.0f };
+        const float R = 21.0f;
+        float ang, pit;
+        int inside = 0, below = 0;
+
+        printf("test: kamera govdeye ve zemine girmiyor\n");
+
+        /* Her yonden ucagin TAM ICINE konumlandirmayi dene */
+        for (ang = -3.1f; ang < 3.1f; ang += 0.4f) {
+            for (pit = -1.4f; pit < 1.4f; pit += 0.35f) {
+                float dist;
+
+                for (dist = 0.0f; dist < R + 5.0f; dist += 2.0f) {
+                    float dx, dy, dz, d;
+
+                    c.pos[0] = plane[0] + sinf(ang) * cosf(pit) * dist;
+                    c.pos[1] = plane[1] + sinf(pit) * dist;
+                    c.pos[2] = plane[2] + cosf(ang) * cosf(pit) * dist;
+
+                    flightcam_clamp(&c, plane, R, 9.0f);
+
+                    dx = c.pos[0] - plane[0];
+                    dy = c.pos[1] - plane[1];
+                    dz = c.pos[2] - plane[2];
+                    d = sqrtf(dx * dx + dy * dy + dz * dz);
+
+                    if (d < R - 0.01f)
+                        inside++;
+                    if (c.pos[1] < 9.0f - 0.01f)
+                        below++;
+                }
+            }
+        }
+
+        check(inside == 0, "kamera hicbir yonden govdenin icinde kalmiyor");
+        check(below == 0, "kamera zeminin altina inmiyor");
+
+        /* Zemin kurali govde kuralini ezmemeli: ucak yerdeyken bile
+         * kamera zeminin uzerinde durur */
+        c.pos[0] = plane[0];
+        c.pos[1] = -500.0f;         /* cok asagida */
+        c.pos[2] = plane[2];
+        flightcam_clamp(&c, plane, R, 9.0f);
+        check(c.pos[1] >= 9.0f, "asagidan gelen kamera zemine oturuyor");
+
+        /* Uzaktaki kamera hic oynatilmamali */
+        c.pos[0] = plane[0] + 400.0f;
+        c.pos[1] = plane[1] + 120.0f;
+        c.pos[2] = plane[2];
+        {
+            float before = c.pos[0];
+
+            flightcam_clamp(&c, plane, R, 9.0f);
+            check(c.pos[0] == before, "engel disindaki kamera oynatilmiyor");
+        }
+    }
+
     if (failures == 0)
-        printf("\n27 kontrol, 0 hata\n");
+        printf("\n31 kontrol, 0 hata\n");
     else
         printf("\n%d HATA\n", failures);
     return failures ? 1 : 0;

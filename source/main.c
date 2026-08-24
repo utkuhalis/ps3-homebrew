@@ -275,10 +275,18 @@ int main(int argc, const char *argv[])
 
         flight_update(&plane, DT);
 
-        if (cam_mode == CAM_FREE)
+        if (cam_mode == CAM_FREE) {
             camera_update(&cam, forward, strafe, updown, yaw_in, pitch_in, DT);
-        else
+
+            /* Serbest kamera kendi icinde yalnizca deniz seviyesini biliyor;
+             * pist yuzeyini ve ucagi da hesaba katmasi icin ayni engel
+             * kontrolunden gecirilir. */
+            flightcam_clamp(&cam, plane.pos, aircraft_bound_radius(),
+                            flightcam_ground_at(&plane, cam.pos[0],
+                                                cam.pos[2]));
+        } else {
             flightcam_update(&cam, cam_mode, &plane, DT);
+        }
 
         hud_update(&hud, &plane, DT);
         audio_update(&plane, &atm);
