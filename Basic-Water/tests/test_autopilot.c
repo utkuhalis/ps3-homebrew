@@ -30,7 +30,7 @@ static void airborne(Flight *f, float alt, float heading, float speed)
     f->vel[0] = sinf(heading) * speed;
     f->vel[1] = 0.0f;
     f->vel[2] = -cosf(heading) * speed;
-    f->throttle = 0.55f;
+    f->throttle = 0.70f;
 }
 
 static void run(Autopilot *ap, Flight *f, int seconds)
@@ -65,25 +65,25 @@ int main(void)
 
     /* --- irtifa tutuyor --- */
     autopilot_init(&ap);
-    airborne(&f, 500.0f, 0.0f, 95.0f);
+    airborne(&f, 3000.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     run(&ap, &f, 60);
-    check(fabsf(f.pos[1] - 500.0f) < 45.0f,
+    check(fabsf(f.pos[1] - 3000.0f) < 120.0f,
           "irtifa 60 saniye boyunca korunuyor");
-    printf("test: irtifa tutuluyor (sapma %.1f m)\n", fabsf(f.pos[1] - 500.0f));
+    printf("test: irtifa tutuluyor (sapma %.1f m)\n", fabsf(f.pos[1] - 3000.0f));
 
     /* --- hedef irtifaya tirmaniyor --- */
     autopilot_init(&ap);
-    airborne(&f, 400.0f, 0.0f, 95.0f);
+    airborne(&f, 2500.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     autopilot_adjust_alt(&ap, 500.0f);
     run(&ap, &f, 120);
-    check(f.pos[1] > 800.0f, "hedef irtifaya tirmaniyor");
+    check(f.pos[1] > 2900.0f, "hedef irtifaya tirmaniyor");
     printf("test: tirmanis komutu calisiyor (%.0f m)\n", f.pos[1]);
 
     /* --- yon tutuyor ve donuyor --- */
     autopilot_init(&ap);
-    airborne(&f, 600.0f, 0.0f, 95.0f);
+    airborne(&f, 3000.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     autopilot_adjust_heading(&ap, 1.20f);
     run(&ap, &f, 90);
@@ -94,7 +94,7 @@ int main(void)
 
     /* --- yatis sinirini asmiyor --- */
     autopilot_init(&ap);
-    airborne(&f, 600.0f, 0.0f, 95.0f);
+    airborne(&f, 3000.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     autopilot_adjust_heading(&ap, 3.0f);
     {
@@ -114,10 +114,10 @@ int main(void)
 
     /* --- suya dalmiyor --- */
     autopilot_init(&ap);
-    airborne(&f, 120.0f, 0.5f, 85.0f);
+    airborne(&f, 900.0f, 0.5f, 190.0f);
     autopilot_engage(&ap, &f);
     run(&ap, &f, 120);
-    check(f.pos[1] > 40.0f, "otopilot ucagi denize indirmiyor");
+    check(f.pos[1] > 400.0f, "otopilot ucagi denize indirmiyor");
     printf("test: guvenli irtifa korunuyor\n");
 
     if (failures == 0)

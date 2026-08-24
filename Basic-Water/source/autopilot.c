@@ -29,10 +29,12 @@ void autopilot_engage(Autopilot *ap, const Flight *f)
 
     /* Cok yavasken kilitlenirse ucak dusme egilimine girer;
      * makul bir seyir hizina yuvarlanir. */
-    if (ap->target_speed < 70.0f)
-        ap->target_speed = 70.0f;
-    if (ap->target_alt < 60.0f)
-        ap->target_alt = 60.0f;
+    /* 737 icin en dusuk makul seyir degerleri; hafif jete gore ayarli
+     * eski esikler (70 m/s) bu govde icin stall altiydi. */
+    if (ap->target_speed < 160.0f)
+        ap->target_speed = 160.0f;
+    if (ap->target_alt < 300.0f)
+        ap->target_alt = 300.0f;
 }
 
 void autopilot_disengage(Autopilot *ap)
@@ -79,9 +81,9 @@ void autopilot_update(const Autopilot *ap, Flight *f, float dt)
 
     /* --- irtifa --- */
     alt_err = ap->target_alt - f->pos[1];
-    vs_target = clampf(alt_err * 0.10f, -AP_VS_LIMIT_MS, AP_VS_LIMIT_MS);
+    vs_target = clampf(alt_err * 0.06f, -AP_VS_LIMIT_MS, AP_VS_LIMIT_MS);
     vs_now = f->vel[1];
-    pitch_cmd = clampf((vs_target - vs_now) * 0.16f - f->p_rate * 1.20f,
+    pitch_cmd = clampf((vs_target - vs_now) * 0.10f - f->p_rate * 2.40f,
                        -1.0f, 1.0f);
 
     /* Stall'a yaklasirken burnu zorlamaz: otopilot ucagi dusurmemeli. */
@@ -96,13 +98,13 @@ void autopilot_update(const Autopilot *ap, Flight *f, float dt)
 
     /* Sonum terimi (acisal hiz) olmadan otopilot hedef yatisi asiyordu:
      * ucagin atalet momenti var, komut kesildiginde donme hemen durmuyor. */
-    roll_cmd = clampf((bank_target - f->roll) * 2.20f - f->r_rate * 1.60f,
+    roll_cmd = clampf((bank_target - f->roll) * 4.00f - f->r_rate * 3.20f,
                       -1.0f, 1.0f);
     f->in_roll = roll_cmd;
     f->in_yaw = 0.0f;
 
     /* --- hiz: gaz --- */
     spd_err = ap->target_speed - f->airspeed;
-    f->throttle = clampf(f->throttle + spd_err * 0.010f * dt * 60.0f,
+    f->throttle = clampf(f->throttle + spd_err * 0.004f * dt * 60.0f,
                          0.0f, 1.0f);
 }

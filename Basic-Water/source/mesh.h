@@ -7,9 +7,11 @@
  * ek bir bayt cevrimi gerekmez. Modul yalnizca isaretci hesaplar; kopya
  * yapmaz. */
 
-/* Kendi urettigimiz modelde her hareketli yuzey ayri parca: 27 adet.
- * Sinir 16 iken model yuklenemiyordu. */
-#define MESH_MAX_PARTS 40
+/* Gercek ucak modellerinde her hareketli yuzey ayri parca oluyor: kendi
+ * urettigimiz jet 27, 737 varligi 41 parca. Sinir once 16, sonra 40 idi ve
+ * her ikisinde de model sessizce reddedildi - mesh testi ikisini de
+ * yakaladi. */
+#define MESH_MAX_PARTS 64
 
 typedef struct {
     char         name[32];
@@ -32,6 +34,10 @@ int mesh_load(Mesh *m, const void *data, unsigned int size);
 
 /* Bir parcanin adiyla aranmasi; bulunamazsa -1 */
 int mesh_find(const Mesh *m, const char *name);
+
+/* Onek ile arama: gercek modellerde ayni yuzey birden cok panele bolunmus
+ * olabiliyor (flap_left01..04). */
+int mesh_find_prefix(const Mesh *m, const char *prefix);
 
 /* Toplam ucgen sayisi (tani icin) */
 unsigned int mesh_triangles(const Mesh *m);

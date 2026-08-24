@@ -252,11 +252,14 @@ void flight_update(Flight *f, float dt)
 {
     float fwd[3], up[3];
     float speed, lift, drag, thrust;
+    float speed_for_turn;
     float acc[3];
     int i;
 
     if (dt <= 0.0f)
         return;
+
+    speed_for_turn = len3(f->vel);
 
     /* --- kumanda girdileri yonelimi degistirir ---
      *
@@ -286,13 +289,39 @@ void flight_update(Flight *f, float dt)
         f->r_rate += (f->in_roll  * ROLL_RATE  * q - f->r_rate) * kr;
         f->y_rate += (f->in_yaw   * YAW_RATE   * q - f->y_rate) * ky;
 
-        f->pitch += f->p_rate * dt;
-        f->roll  += f->r_rate * dt;
-        f->yaw   += f->y_rate * dt;
+        /* Govde acisal hizlarini Euler acilarina cevir.
+         *
+         * p_rate/q_rate/r_rate GOVDE eksenlerinde tanimlidir; bunlari
+         * dogrudan Euler acilarina eklemek yalnizca duz ucusta dogrudur.
+         * Yatisli ucakta yunuslama girdisi ucagi DONDURUR (yaw), cunku
+         * govde yunuslama ekseni artik dunya yataydan sapmistir. Bu cevrim
+         * olmadan agir govde her yatista burnunu asagi cevirip stall'a
+         * giriyordu; hafif jette kumanda otoritesi cok yuksek oldugu icin
+         * belirti gorunmuyordu. */
+        {
+            float sr = sinf(f->roll), cr = cosf(f->roll);
+            float cp2 = cosf(f->pitch);
+            float tp = sinf(f->pitch) / (cp2 > 0.15f ? cp2 :
+                                         (cp2 < -0.15f ? cp2 : 0.15f));
+            float cpd = (cp2 > 0.15f) ? cp2 : 0.15f;
+
+            float coupled = f->p_rate * sr + f->y_rate * cr;
+
+            f->roll  += (f->r_rate + coupled * tp) * dt;
+            f->pitch += (f->p_rate * cr - f->y_rate * sr) * dt;
+            f->yaw   += (coupled / cpd) * dt;
+        }
     }
 
-    /* yatis burnu cevirir (koordineli donus) */
-    f->yaw += sinf(f->roll) * 0.55f * dt;
+    /* Koordineli donus: yatista tasimanin yatay bileseni ucagi cevirir.
+     * Bu, kumanda kaynakli Euler cevriminden AYRI bir etkidir - yatis
+     * kumandaya dokunulmasa bile donusu surdurur. */
+    if (speed_for_turn > 1.0f) {
+        float turn = (GRAVITY * tanf(clampf(f->roll, -1.2f, 1.2f)))
+                     / speed_for_turn;
+
+        f->yaw += turn * dt;
+    }
 
     f->pitch = clampf(f->pitch, -1.30f, 1.30f);
 
@@ -354,11 +383,25 @@ void flight_update(Flight *f, float dt)
      * kumanda birakildiginda ucagin kendi kendine duz ucmasidir. */
     if (speed > 12.0f) {
         float q = 0.5f * AIR_DENSITY * speed * speed * WING_AREA_M2;
-        float cl_needed = (f->mass_kg * GRAVITY) / (q > 1.0f ? q : 1.0f);
-        float trim_aoa = (cl_needed - f->flap * CL_FLAP) / CL_SLOPE;
+        float cl_needed;
+        float trim_aoa;
         float k = PITCH_STABILITY * dt;
         float damp = speed / CONTROL_REF_MS;
 
+        /* Yatista tasimanin DIKEY bileseni cos(roll) kadar azalir; ucagin
+         * ayni irtifayi tutmasi icin daha yuksek hucum acisinda trim olmasi
+         * gerekir. Bu terim yokken agir govde her yatista burnunu asagi
+         * cevirip stall'a giriyordu - hafif jet kutlesinde fark edilmiyordu
+         * cunku kumanda otoritesi kutleye gore cok yuksekti. */
+        {
+            float cr = cosf(f->roll);
+            float lift_factor = (cr > 0.20f) ? cr : 0.20f;
+
+            cl_needed = (f->mass_kg * GRAVITY)
+                        / ((q > 1.0f ? q : 1.0f) * lift_factor);
+        }
+
+        trim_aoa = (cl_needed - f->flap * CL_FLAP) / CL_SLOPE;
         trim_aoa = clampf(trim_aoa, -0.05f, STALL_ANGLE_RAD * 0.85f);
 
         if (damp > 1.2f)

@@ -169,7 +169,7 @@ static void test_pistte_basliyor(void)
     float rw[2] = { -1500.0f, 1200.0f };
 
     printf("test: ucak pistte, duruyor ve motor rolantide basliyor\n");
-    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+    flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
 
     CHECK(f.on_ground, "yerde");
     CHECK(f.airspeed < 0.1f, "duruyor");
@@ -185,7 +185,7 @@ static void test_gaz_vermeden_kalkamaz(void)
     int i;
 
     printf("test: gaz verilmeden ucak pistte kaliyor\n");
-    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+    flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
     f.in_pitch = 1.0f;              /* burnu kaldirmayi dene */
 
     for (i = 0; i < 600; i++)
@@ -203,7 +203,7 @@ static void test_kalkis_yapilabiliyor(void)
     float max_speed = 0.0f;
 
     printf("test: tam gazla hizlanip burun kaldirilinca kalkis oluyor\n");
-    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+    flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
     f.throttle = 1.0f;
 
     /* Once hizlan (burun yerde), sonra burnu kaldir.
@@ -331,20 +331,20 @@ static void test_pist_dikdortgen_collider(void)
     flight_init_on_runway(&f, rw, 0.0f, 0.0f);
 
     CHECK(flight_over_runway(&f, 0.0f, 0.0f), "merkez pist uzerinde");
-    CHECK(flight_over_runway(&f, 0.0f, -500.0f), "pist basi uzerinde");
-    CHECK(flight_over_runway(&f, 0.0f, 500.0f), "pist sonu uzerinde");
-    CHECK(flight_over_runway(&f, 40.0f, 0.0f), "pist genisligi icinde");
+    CHECK(flight_over_runway(&f, 0.0f, -1200.0f), "pist basi uzerinde");
+    CHECK(flight_over_runway(&f, 0.0f, 1200.0f), "pist sonu uzerinde");
+    CHECK(flight_over_runway(&f, 25.0f, 0.0f), "pist genisligi icinde");
 
     CHECK(!flight_over_runway(&f, 200.0f, 0.0f),
           "pistin 200 birim yani DISARIDA");
-    CHECK(!flight_over_runway(&f, 0.0f, 700.0f),
-          "pistin 700 birim otesi DISARIDA");
-    CHECK(!flight_over_runway(&f, 60.0f, 0.0f),
+    CHECK(!flight_over_runway(&f, 0.0f, 1500.0f),
+          "pistin 1500 birim otesi DISARIDA");
+    CHECK(!flight_over_runway(&f, 40.0f, 0.0f),
           "genislik sinirinin disi DISARIDA");
 
     /* dondurulmus pist: yon 90 derece -> pist X ekseninde uzanir */
     flight_init_on_runway(&f, rw, 1.5708f, 0.0f);
-    CHECK(flight_over_runway(&f, 500.0f, 0.0f),
+    CHECK(flight_over_runway(&f, 1200.0f, 0.0f),
           "dondurulmus pistte uzun eksen dogru");
     CHECK(!flight_over_runway(&f, 0.0f, 200.0f),
           "dondurulmus pistte enine sinir dogru");

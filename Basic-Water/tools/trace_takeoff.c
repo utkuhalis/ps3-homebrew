@@ -3,7 +3,7 @@
 #include "../source/flight.h"
 int main(void){
     Flight f; float rw[2]={0,0};
-    flight_init_on_runway(&f, rw, 0.0f, 460.0f);
+    flight_init_on_runway(&f, rw, 0.0f, 500.0f);
     f.throttle=1.0f;
     for(int i=0;i<60*40;i++){
         float horiz=sqrtf(f.vel[0]*f.vel[0]+f.vel[2]*f.vel[2]);

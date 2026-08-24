@@ -90,6 +90,17 @@ int mesh_find(const Mesh *m, const char *name)
     return -1;
 }
 
+int mesh_find_prefix(const Mesh *m, const char *prefix)
+{
+    size_t n = strlen(prefix);
+    int i;
+
+    for (i = 0; i < m->part_count; i++)
+        if (strncmp(m->part[i].name, prefix, n) == 0)
+            return i;
+    return -1;
+}
+
 unsigned int mesh_triangles(const Mesh *m)
 {
     unsigned int t = 0;

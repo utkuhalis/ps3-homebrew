@@ -66,15 +66,19 @@ int main(void)
 
     /* Kumanda yuzeyleri ayri parca olarak gelmeli - animasyon buna bagli */
     {
+        /* Her modelde bulunmasi ZORUNLU parcalar. Elevator ve tekerlek
+         * gobegi modele gore degisir: 737 varliginda yatay stabilizator
+         * govdeye dahil ve tekerlekler takim grubunun icinde, bizim
+         * urettigimiz jette ise ayri parcalar. Bu yuzden burada yalnizca
+         * her ucakta olmasi gereken yuzeyler aranir. */
         const char *need[] = { "body", "flap_left", "flap_right",
                                "aileron_left", "aileron_right", "rudder",
-                               "wheel_front", "wheel_left", "wheel_right",
-                               "spoiler_left", "spoiler_right",
-                               "elevator_left", "elevator_right" };
+                               "spoiler_left", "spoiler_right" };
         size_t n;
 
         for (n = 0; n < sizeof(need) / sizeof(need[0]); n++) {
-            if (mesh_find(&m, need[n]) < 0) {
+            /* Parcalar numarali da olabilir (flap_left01); onek yeter. */
+            if (mesh_find_prefix(&m, need[n]) < 0) {
                 printf("FAIL: parca eksik: %s\n", need[n]);
                 failures++;
             }

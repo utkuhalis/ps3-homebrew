@@ -139,7 +139,7 @@ int main(int argc, const char *argv[])
     objectives_init(&objs);
     /* Pistte, motor rolantide basla: kalkisi oyuncu yapar. */
     flight_init_on_runway(&plane, RUNWAY_POS[0], 0.55f,
-                          RUNWAY_LENGTH * 0.42f);
+                          RUNWAY_LENGTH * 0.45f);
     proj = mat4_perspective(FOV_DEG * 3.14159265f / 180.0f,
                             rsx3d_aspect(), Z_NEAR, Z_FAR);
 

@@ -51,8 +51,8 @@
 /* Pist yuzeyi olculeri (runway.h ile ayni olmali). Ucus modulu cizim
  * modulune bagimli olmasin diye burada tekrar tanimlanir; test bu ikisinin
  * ayni kaldigini dogrular. */
-#define RUNWAY_HALF_LEN    550.0f
-#define RUNWAY_HALF_WID     48.0f /* acik tekerleklerin surukleme katkisi */
+#define RUNWAY_HALF_LEN   1300.0f
+#define RUNWAY_HALF_WID     30.0f /* acik tekerleklerin surukleme katkisi */
 
 /* Kumanda yuzeyi sinirlari (radyan) */
 #define FLAP_MAX_RAD     0.70f      /* ~40 derece */
