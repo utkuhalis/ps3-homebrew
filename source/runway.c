@@ -39,7 +39,8 @@ typedef struct {
 
 /* Her pist: platform + asfalt + esik cizgileri + orta cizgi parcalari */
 #define STRIPES        9
-#define QUADS_PER_RUNWAY (2 + 4 + STRIPES)
+/* cim + omuz + asfalt + 2 esik + 2 kenar + orta cizgiler */
+#define QUADS_PER_RUNWAY (3 + 4 + STRIPES)
 #define TOTAL_QUADS    (QUADS_PER_RUNWAY * RUNWAY_COUNT)
 #define TOTAL_VERTS    (TOTAL_QUADS * 4)
 #define TOTAL_INDICES  (TOTAL_QUADS * 6)
@@ -63,6 +64,15 @@ static int tex_index = -1;
 /* Dokunun kac dunya birimini kapladigi. Kucuk deger = sik tekrar. */
 #define TEX_WORLD_SIZE 9.0f
 
+/* Yuzey tipleri: shader dokuyu bunlara gore uretir.
+ * 0 duz renk (cizgiler, isaretler), 1 asfalt, 2 cim, 3 beton */
+#define SURF_PLAIN    0.0f
+#define SURF_ASPHALT  1.0f
+#define SURF_GRASS    2.0f
+#define SURF_CONCRETE 3.0f
+
+static float quad_surface = SURF_PLAIN;
+
 static void add_quad(float cx, float cz, float y, float w, float l,
                      float angle, float r, float g, float b, float bright)
 {
@@ -84,7 +94,7 @@ static void add_quad(float cx, float cz, float y, float w, float l,
         v[i].z = cz + ox[i] * sa + oz[i] * ca;
         v[i].r = r; v[i].g = g; v[i].b = b;
         v[i].bright = bright;
-        v[i].pad = 0.0f;
+        v[i].pad = quad_surface;
 
         /* UV dunya olceginde: doku parca boyutundan bagimsiz olarak ayni
          * sikilikta tekrar eder, boylece pist ve cevresi ayni dokuda
@@ -105,13 +115,25 @@ static void build_runway(int index)
     float ca = cosf(a), sa = sinf(a);
     int i;
 
-    /* platform: asfalttan biraz genis, koyu gri */
-    add_quad(cx, cz, y - 0.6f, RUNWAY_WIDTH + 46.0f, RUNWAY_LENGTH + 60.0f, a,
-             0.30f, 0.32f, 0.35f, 1.0f);
+    /* Cevre arazi: pist tek basina denizin ustunde yuzen bir serit gibi
+     * duruyordu. Genis bir cim alan onu bir havaalanina benzetiyor. */
+    quad_surface = SURF_GRASS;
+    add_quad(cx, cz, y - 1.2f, RUNWAY_WIDTH + 520.0f, RUNWAY_LENGTH + 700.0f,
+             a, 0.34f, 0.42f, 0.24f, 1.0f);
 
-    /* asfalt */
+    /* omuz: asfaltin iki yanindaki beton serit */
+    quad_surface = SURF_CONCRETE;
+    add_quad(cx, cz, y - 0.6f, RUNWAY_WIDTH + 46.0f, RUNWAY_LENGTH + 60.0f, a,
+             0.52f, 0.53f, 0.55f, 1.0f);
+
+    /* Asfalt. Onceki renk (0.13) neredeyse siyahti; gercek asfalt bundan
+     * belirgin sekilde acik ve dokulu. */
+    quad_surface = SURF_ASPHALT;
     add_quad(cx, cz, y, RUNWAY_WIDTH, RUNWAY_LENGTH, a,
-             0.13f, 0.14f, 0.16f, 1.0f);
+             0.30f, 0.31f, 0.33f, 1.0f);
+
+    /* isaretler duz renk kalir */
+    quad_surface = SURF_PLAIN;
 
     /* iki uctaki esik bantlari */
     for (i = 0; i < 2; i++) {

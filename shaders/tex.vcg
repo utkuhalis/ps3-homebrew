@@ -1,24 +1,24 @@
-/* Dokulu 3D nesneler (pistler, zemin) - vertex programi.
- *
- * Renk yine vertex ozniteliginde tasinir (parcalar tek cizimde gider);
- * doku koordinati ayri bir oznitelikten gelir ve dunya olceginde
- * tekrarlanacak sekilde carpilir. */
+/* Zemin yuzeyleri - vertex programi.
+ * Renk vertex ozniteliginde tasinir; TEXCOORD0 parlaklik ve yuzey tipini,
+ * doku koordinati ise dunya olceginde tekrar eden UV'yi tasir. */
 void main
 (
 	float3 vertexPosition : POSITION,
 	float3 vertexNormal   : NORMAL,     /* renk */
-	float4 vertexTexcoord : TEXCOORD0,  /* x: parlaklik, y: kullanilmiyor, zw: uv */
+	float4 vertexTexcoord : TEXCOORD0,  /* x: parlaklik, y: yuzey tipi, zw: uv */
 
 	uniform float4x4 mvpMatrix,
 
 	out float4 ePosition : POSITION,
 	out float4 oColor    : TEXCOORD0,
 	out float4 oWorldPos : TEXCOORD1,
-	out float2 oUV       : TEXCOORD2
+	out float2 oUV       : TEXCOORD2,
+	out float4 oSurf     : TEXCOORD3
 )
 {
 	ePosition = mul(mvpMatrix, float4(vertexPosition, 1.0f));
 	oColor    = float4(vertexNormal * vertexTexcoord.x, 1.0f);
 	oWorldPos = float4(vertexPosition, 1.0f);
 	oUV       = vertexTexcoord.zw;
+	oSurf     = float4(vertexTexcoord.y, 0.0f, 0.0f, 0.0f);
 }
