@@ -1,104 +1,100 @@
-# PS3 Homebrew Games
+# Basic Water — a flight simulator for the PlayStation 3
 
-Homebrew games for the PlayStation 3, written with PSL1GHT.
-The entire toolchain lives inside Docker — no SDK, compiler or library is
-installed on the host machine. Runs natively (arm64) on Apple Silicon.
+A flight simulator running on real PS3 hardware, written with PSL1GHT against
+the RSX directly. No engine, no middleware: the renderer, the flight model, the
+audio synthesis and the asset pipeline are all in this repository.
 
-## Download
-
-Pre-built `.pkg` files are attached to the
-[latest release](../../releases/latest). Install them on a CFW/HEN console via
-Package Manager, or drop the included `.self` files straight into RPCS3.
-
-Both packages are verified: the exact `EBOOT.BIN` shipped inside each `.pkg`
-is booted in RPCS3 as part of the release process.
-
-## Projects
-
-### [Ping Pong](Ping-Pong/) — playable
-
-A complete pong game with menus.
-
-- Menu (Start / About / Quit), single player vs. AI and two-player modes
-- Matches to 11 points, pause, winner screen
-- Medium-difficulty bot (tracks the ball, but beatable)
-- Proportional paddle speed on the analog stick, full speed on the D-pad
-- 8x8 bitmap font built into the code
-- Background image support (converted to raw pixels and embedded at build time)
-- 29 unit tests
-
-### [Basic Water](Basic-Water/) — playable
-
-A flight simulator over an open sea: real aircraft model, flight physics,
-runways, weather and a full instrument panel.
+The entire toolchain lives in Docker — nothing is installed on your machine.
+One command produces a `.pkg` you can install on a CFW console.
 
 ![Basic Water](docs/basic-water.png)
 
-- **Flight model:** thrust, lift, drag, stall in both directions, angular
-  inertia, G-loading, trim stability. Control authority scales with dynamic
-  pressure — a parked aircraft does not respond to the stick.
-- **Aircraft:** a real 60k-triangle glTF model with separated control
-  surfaces; flaps, ailerons and rudder deflect with your input, and the
-  landing gear retracts.
-- **Sky:** horizon-to-zenith gradient, sun disc and halo, wind-drifting
-  clouds — procedural, no textures.
-- **Sea:** two large waves in geometry, two fine waves as per-pixel normals;
-  Fresnel-weighted sky reflection, sun glitter, distance fog.
-- **Weather and time of day:** clear, cloudy, rainy, foggy, stormy; day,
-  sunset, night. Selectable from the in-game menu.
-- **Instruments:** airspeed, altitude, artificial horizon, throttle lever,
-  minimap, objectives, STALL / OVER G / LOW FUEL warnings with audio.
-- **Autopilot:** holds altitude, heading and speed; releases when you touch
-  the stick.
-- **Audio:** engine, wind, sea, stall horn, gear/flap servo, wheel roll and
-  touchdown — all synthesised, no sound files.
-- 7 test suites covering flight physics, camera, autopilot, atmosphere,
-  menus, mesh loading and math.
+*Running in RPCS3. Sky, sun, clouds and water are computed in the shader —
+none of it is a pre-made texture.*
 
-## Status and direction
+## Download
 
-Basic Water is early and honest about it. The 3D model is a donated asset with
-approximated control surfaces, the flight dynamics are a simplification, some
-instruments are wrong or missing, collision is two special cases, there are no
-textures or shadows, and animations and audio are minimal. These are tracked
-one by one in the [issue list](../../issues) — see the
-[roadmap](../../issues/2) for the whole picture.
-
-All of it gets fixed over time. The goal is a flight simulator that genuinely
-feels like flying: **airliners and fighter jets**, eventually **playable online
-on CFW consoles**.
-
-**Help is welcome, in any form** — code, 3D models, sound recordings, testing on
-real hardware, or simply telling us what feels wrong when you fly it. The whole
-toolchain lives in Docker, so contributing needs no SDK on your machine:
-`./build.sh` and you have a `.pkg`.
-
-Assets that would help right now:
-
-- **Aircraft models** (`.glb` / `.obj`, 20k–60k triangles, metres, nose along
-  −Z) with control surfaces as separately named objects — see
-  [#3](../../issues/3)
-- **Sound recordings** (48 kHz 16-bit WAV, loopable 2–6 s) — see
-  [#8](../../issues/8)
-
-## Building
-
-Both projects build with a single command. Docker is the only requirement.
-
-```sh
-cd Basic-Water        # or Ping-Pong
-./build.sh            # produces .self and .pkg
-./build.sh test       # runs the host-side test suites
-```
-
-Outputs:
+Pre-built packages are attached to the [latest release](../../releases/latest).
 
 | File | Use |
 |---|---|
-| `*.fake.self` | Drag into RPCS3 |
-| `*.pkg` | Install on a real PS3 (CFW/HEN) |
+| `basicwater.pkg` | Real PS3 (CFW/HEN) — Package Manager → Install Package Files |
+| `basicwater.fake.self` | RPCS3 — File → Boot SELF/ELF |
 
-Extra commands for Basic Water:
+Packages are verified before release: the exact `EBOOT.BIN` inside the `.pkg`
+is booted in RPCS3 and checked against the game's own diagnostic log.
+
+## What works
+
+**Flight model** — lift, drag and stall from dynamic pressure and angle of
+attack, tuned to a Boeing 737-800: 41 t empty, 125 m² wing, 235 kN thrust,
+rotation at 75 m/s. Angular inertia means the aircraft has weight; body rates
+are converted to Euler rates properly, so pulling back in a bank turns the
+aircraft instead of dropping the nose. Trim accounts for the lift lost to bank.
+Control authority scales with dynamic pressure — a parked aircraft ignores the
+stick.
+
+**Aircraft** — every moving surface is a separate part: flaps, ailerons,
+spoilers, rudder, landing gear with doors, engine fans, cabin doors. They
+deflect with your input and the wheels spin with ground speed.
+
+![Aircraft](docs/aircraft-views.png)
+
+**Environment** — procedural sky with sun and drifting clouds, water with
+per-pixel wave normals and Fresnel-weighted reflection, weather (clear,
+cloudy, rainy, foggy, stormy) and time of day, two runways 2600 m long.
+
+**Instruments** — airspeed, altitude, artificial horizon, throttle lever,
+minimap, objectives, and STALL / OVER G / LOW FUEL warnings with audio.
+
+![HUD](docs/hud-preview.png)
+
+*The HUD, rasterised on the host exactly the way the GPU does it — pixel-centre
+coverage, MSAA off — so half-pixel geometry that would vanish on console is
+caught before it ships.*
+
+**Autopilot** — holds altitude, heading and speed by producing stick input, so
+it obeys the same physics you do. Holds altitude to within a metre. Releases
+the moment you touch the stick.
+
+**Audio** — engine, wind, sea, stall horn, gear and flap servos, wheel roll and
+touchdown. All synthesised; there are no sound files.
+
+**Cameras** — chase with a free orbit, cockpit, both wings, tail, and a
+detached free camera.
+
+## Controls
+
+| Action | Pad | Keyboard (RPCS3 default) |
+|---|---|---|
+| **Fly** (pitch / roll) | **Right stick** (or D-pad) | arrow keys |
+| **Orbit camera** | **Left stick** | W A S D |
+| Zoom in / out | L3 / L3 + Triangle | F / F + V |
+| Throttle up | R2 or R1 | T or E |
+| Throttle down | L2 or L1 | R or Q |
+| Flap notch | Square | Z |
+| Spoiler + brakes | Triangle (hold) | V |
+| Landing gear | Cross | X |
+| Camera mode | Circle | C |
+| Autopilot | R3 | G |
+| Settings menu | Select | Space |
+| Quit | Start | Enter |
+
+**Taking off:** the aircraft starts stopped at the head of the runway, engine
+at idle. Hold throttle until the on-screen strip says you have reached rotation
+speed, then pull back on the right stick.
+
+## Building
+
+Docker is the only requirement.
+
+```sh
+./build.sh          # produces .self and .pkg
+./build.sh test     # host-side test suites
+./build.sh clean    # removes build outputs
+```
+
+Deploying to a console over the network:
 
 ```sh
 ./build.sh gonder <PS3_IP>     # upload the .pkg over FTP
@@ -106,23 +102,82 @@ Extra commands for Basic Water:
 ./build.sh log <PS3_IP>        # fetch the on-console diagnostic log
 ```
 
-## How it is tested
+Three one-off Docker images do the work, so nothing lands on the host:
 
-PS3 hardware code (RSX, pad, audio) cannot be unit tested, so everything that
-can be kept pure is kept pure and tested on the host inside Docker: flight
-physics, camera math, autopilot, atmosphere, menu state, mesh parsing.
+| Image | Why |
+|---|---|
+| `zeldin/ps3dev-docker` (arm64) | ps3toolchain + PSL1GHT, native on Apple Silicon |
+| `ps3-cgcomp` (amd64) | `cgcomp` needs the NVIDIA Cg Toolkit, which is x86-only |
+| `ps3-assets` | Pillow and fontTools for texture and font conversion |
 
-Rendering is verified before it ever reaches the console — `tools/ui_preview.c`
-rasterises the HUD exactly as the GPU would (pixel-centre coverage, no MSAA)
-and writes a PNG, and the shader formulas have C counterparts that are
-rendered on the host and compared.
+Shader output (`.vpo`/`.fpo`) is RSX microcode and architecture-independent, so
+it is produced on amd64 and linked into the arm64 build.
 
-## Toolchain
+## Assets
 
-- Base image: `zeldin/ps3dev-docker` (ps3toolchain + PSL1GHT), arm64 native
-- Cg shaders are compiled in a separate amd64 image, because the NVIDIA Cg
-  Toolkit is x86-only. The resulting `.vpo`/`.fpo` RSX microcode is
-  architecture-independent, so it is built once and linked on arm64.
+Models are converted at build time by `tools/glb_to_mesh.py` — pure Python, no
+dependencies. Every moving surface is its own part, recognised by name prefix,
+because real models split one surface across several panels
+(`flap_left01..04`, `spoiler_right01..06`) that move together.
+
+The in-repo default is `assets/model/jet.glb`, generated parametrically by
+`tools/blender/build_aircraft.py` in headless Blender: 25 parts, 4280
+triangles, ends capped, UVs unwrapped per part. It exists so the project builds
+for anyone with no third-party asset.
+
+Textures are CC0 from [ambientCG](https://ambientcg.com), converted to
+RSX-ready ARGB with a full mip chain by `tools/make_textures.py`.
+
+## Testing without a console
+
+Hardware code (RSX, pad, audio) cannot be unit tested, so everything that can
+be pure is pure and tested on the host:
+
+| Suite | Covers |
+|---|---|
+| `test_flight` | lift, drag, stall in both directions, takeoff, runway collision, fuel |
+| `test_autopilot` | altitude and heading hold, bank limits, stall protection |
+| `test_camview` | camera aiming, orientation matrix, artificial horizon |
+| `test_math` | matrices, projection, camera collision |
+| `test_atmosphere` | weather and time-of-day combinations |
+| `test_menu` | menu state machine |
+| `test_mesh` | model file parsing against the real data file |
+
+`build.sh test` also greps the source for two regressions that once shipped:
+flight state being reset inside the main loop, and controls not being bound.
+
+These are not decoration. The mesh test caught a silently rejected model twice
+when the part limit was too low. The turn test caught a real defect in the
+flight model at airliner mass. The camera test caught a sign error that put the
+camera in front of the aircraft.
+
+## Status
+
+Early, and honest about it. Known problems are tracked one by one in the
+[issue list](../../issues); the [roadmap](../../issues/2) has the whole
+picture. Currently open: model quality, remaining gaps in flight dynamics,
+instrument bugs, collision handling, graphics, and animation and audio.
+
+The goal is a simulator that genuinely feels like flying: **airliners and
+fighter jets**, eventually **playable online on CFW consoles**.
+
+**Help is welcome in any form** — code, 3D models, sound recordings, testing on
+real hardware, or simply saying what feels wrong when you fly it. Contributing
+needs no SDK: `./build.sh` and you have a package.
+
+Useful right now:
+
+- **Aircraft models** (`.glb` / `.obj`, 20k–60k triangles, metres, nose along
+  −Z) with control surfaces as separately named objects — see
+  [#3](../../issues/3)
+- **Sound recordings** (48 kHz 16-bit WAV, loopable 2–6 s) — see
+  [#8](../../issues/8)
+
+## History
+
+This repository also contains a finished **Ping Pong** game, the first thing
+built here. It now lives on the [`old`](../../tree/old) branch together with
+the earlier two-project layout.
 
 ## License
 

@@ -1,6 +1,0 @@
-build/
-build-test/
-*.elf
-*.self
-*.pkg
-*.map
