@@ -97,9 +97,9 @@ Docker is the only requirement.
 Deploying to a console over the network:
 
 ```sh
-./build.sh gonder <PS3_IP>     # upload the .pkg over FTP
-./build.sh calistir <PS3_IP>   # run the .self directly via ps3load
-./build.sh log <PS3_IP>        # fetch the on-console diagnostic log
+./build.sh send <PS3_IP>   # upload the .pkg over FTP
+./build.sh run <PS3_IP>    # run the .self directly via ps3load
+./build.sh log <PS3_IP>    # fetch the on-console diagnostic log
 ```
 
 Three one-off Docker images do the work, so nothing lands on the host:

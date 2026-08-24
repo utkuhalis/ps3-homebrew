@@ -5,9 +5,10 @@
 #   ./build.sh clean    -> ciktilar temizlenir
 #   ./build.sh test     -> matematik ve kamera birim testlerini calistirir
 #
-#   ./build.sh gonder <PS3_IP>    -> .pkg'yi FTP ile PS3'e kopyalar (kalici kurulum)
-#   ./build.sh calistir <PS3_IP>  -> .self'i ps3load ile dogrudan calistirir (hizli deneme)
-#   ./build.sh log <PS3_IP>       -> PS3'ten teshis kaydini ceker
+#   ./build.sh send <PS3_IP>      -> upload the .pkg to the console over FTP
+#   ./build.sh run <PS3_IP>       -> run the .self directly via ps3load
+#   ./build.sh log <PS3_IP>       -> fetch the console's diagnostic log
+#   (gonder / calistir also work, for compatibility)
 #
 # Iki asamali derleme:
 #   1) Cg shader'lari amd64 imajinda derlenir (Cg Toolkit yalnizca x86 icin var)
@@ -92,9 +93,9 @@ fi
 # --- PS3'e gonderme ---
 #   ./build.sh gonder <PS3_IP>    : .pkg'yi FTP ile PS3'e kopyalar
 #   ./build.sh calistir <PS3_IP>  : .self'i ps3load ile dogrudan calistirir
-if [ "$1" = "gonder" ]; then
+if [ "$1" = "send" ] || [ "$1" = "gonder" ]; then
     IP="$2"
-    [ -n "$IP" ] || { echo "Kullanim: ./build.sh gonder <PS3_IP>"; exit 1; }
+    [ -n "$IP" ] || { echo "Usage: ./build.sh send <PS3_IP>"; exit 1; }
     [ -f basicwater.pkg ] || { echo "Once ./build.sh ile derleyin"; exit 1; }
 
     echo ">>> $IP adresine gonderiliyor (FTP)"
@@ -115,7 +116,7 @@ fi
 
 if [ "$1" = "log" ]; then
     IP="$2"
-    [ -n "$IP" ] || { echo "Kullanim: ./build.sh log <PS3_IP>"; exit 1; }
+    [ -n "$IP" ] || { echo "Usage: ./build.sh log <PS3_IP>"; exit 1; }
 
     echo ">>> PS3'ten teshis kaydi aliniyor"
     if curl -s --connect-timeout 10 "ftp://$IP/dev_hdd0/tmp/basicwater.log" \
@@ -131,9 +132,9 @@ if [ "$1" = "log" ]; then
     exit 0
 fi
 
-if [ "$1" = "calistir" ]; then
+if [ "$1" = "run" ] || [ "$1" = "calistir" ]; then
     IP="$2"
-    [ -n "$IP" ] || { echo "Kullanim: ./build.sh calistir <PS3_IP>"; exit 1; }
+    [ -n "$IP" ] || { echo "Usage: ./build.sh run <PS3_IP>"; exit 1; }
     [ -f basicwater.self ] || { echo "Once ./build.sh ile derleyin"; exit 1; }
 
     echo ">>> $IP adresinde dogrudan calistiriliyor (ps3load)"

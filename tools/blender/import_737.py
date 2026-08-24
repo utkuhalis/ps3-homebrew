@@ -49,6 +49,21 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.import_scene.fbx(filepath=SRC)
 
+    # Parca konumlari RIG_boeing737 adli bir kok nesneden gelir. Mesh
+    # olmayanlari once silmek, cocuklarin dunya konumunu dusuruyordu: tum
+    # parcalar orijine yigiliyor, sol ve sag motor ust uste biniyordu.
+    # Once baglar konum korunarak cozulur ve donusumler mesh'e islenir.
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+    bpy.ops.object.select_all(action='DESELECT')
+    for ob in bpy.data.objects:
+        if ob.type == 'MESH':
+            ob.select_set(True)
+    bpy.context.view_layer.objects.active = next(
+        (o for o in bpy.data.objects if o.type == 'MESH'), None)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    bpy.ops.object.select_all(action='DESELECT')
+
     used = {}
     for ob in list(bpy.data.objects):
         if ob.type != 'MESH':
@@ -60,8 +75,6 @@ def main():
         used[base] = k + 1
         ob.name = base if k == 0 else '%s_%d' % (base, k)
 
-    # FBX Z-yukari geliyor; glTF disa aktarici Blender eksenlerini bekledigi
-    # icin dondurmeye gerek yok - import zaten Blender duzenine getirdi.
     tot = 0
     print('\n=== ESLENEN PARCALAR ===')
     for ob in sorted(bpy.data.objects, key=lambda o: o.name):

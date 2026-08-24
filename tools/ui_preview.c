@@ -137,11 +137,11 @@ int main(int argc, char **argv)
 
     /* --- font orneklemesi --- */
     font_draw_text(40, 30, 3, "BASIC WATER", RGB(255, 255, 255));
-    font_draw_text(40, 80, 2, "AĞIRLIK  4687 kg", RGB(240, 245, 255));
-    font_draw_text(40, 110, 2, "YÖN  6 derece   YÜKSEKLİK", RGB(240, 245, 255));
-    font_draw_text(40, 140, 2, "GÖREVLER: Kalkış pistini bul", RGB(240, 245, 255));
-    font_draw_text(40, 170, 2, "ŞİMDİ ÇOK GÜZEL ĞÜŞİÖÇ ığşiöç", RGB(240, 245, 255));
-    font_draw_text(40, 200, 1, "kucuk etiket: HIZ km/s  EĞİM", RGB(240, 245, 255));
+    font_draw_text(40, 80, 2, "WEIGHT  59000 kg", RGB(240, 245, 255));
+    font_draw_text(40, 110, 2, "HEADING 6 deg   ALTITUDE", RGB(240, 245, 255));
+    font_draw_text(40, 140, 2, "OBJECTIVES: find the runway", RGB(240, 245, 255));
+    font_draw_text(40, 170, 2, "THROTTLE FLAPS SPOILER GEAR", RGB(240, 245, 255));
+    font_draw_text(40, 200, 1, "small label: SPEED km/h  PITCH", RGB(240, 245, 255));
     font_draw_text(40, 225, 2, "abcdefghijklmnopqrstuvwxyz", RGB(240, 245, 255));
     font_draw_text(40, 255, 2, "0123456789 %.,:-/()", RGB(240, 245, 255));
 
