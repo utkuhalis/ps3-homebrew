@@ -102,6 +102,11 @@ static float surface_angle(SurfaceKind k, const Flight *f)
 
 /* Aydinlatma fragment tarafinda yapildigi icin burada yalnizca ham veri
  * tasinir: konum, dunya uzayindaki normal, renk ve metaliklik. */
+/* Alan sirasi bilerek boyle: renk NORMAL yuvasina, normal ile metaliklik
+ * TEXCOORD0 yuvasina baglanir. Once tersiydi (normal NORMAL'de, renk TEX0'da)
+ * ve govde simsiyah ciziliyordu - color.rgb fragment'a dogru ulasiyor olmasina
+ * ragmen onunla yapilan carpim sifira yakin cikiyordu. Calisan tex.vcg de
+ * rengini NORMAL yuvasindan alir; o duzen taklit edildi. */
 typedef struct {
     float x, y, z;
     float nx, ny, nz;
@@ -129,6 +134,9 @@ static void *fp_ucode = NULL;
 static u32  *fp_buf = NULL;
 static u32   fp_off = 0;
 static rsxProgramConst *c_mvp, *c_eye, *c_hor, *c_fog;
+/* Isik artik vertex tarafinda cozuluyor, bu yuzden gunes ve gokyuzu
+ * degerleri vertex programina gider. */
+static rsxProgramConst *c_v_eye, *c_v_sun, *c_v_scol, *c_v_hor, *c_v_zen;
 static rsxProgramConst *c_sun, *c_suncol, *c_zen;
 
 #define V(name, a, b, c) float name[3]; name[0] = (a); name[1] = (b); name[2] = (c)
@@ -238,7 +246,12 @@ int aircraft_init(void)
                model.part[i].index_count * sizeof(u16));
 
     rsxVertexProgramGetUCode(vp, &vp_ucode, &sz);
-    c_mvp = rsxVertexProgramGetConst(vp, "mvpMatrix");
+    c_mvp    = rsxVertexProgramGetConst(vp, "mvpMatrix");
+    c_v_eye  = rsxVertexProgramGetConst(vp, "eyePosition");
+    c_v_sun  = rsxVertexProgramGetConst(vp, "sunDir");
+    c_v_scol = rsxVertexProgramGetConst(vp, "sunColor");
+    c_v_hor  = rsxVertexProgramGetConst(vp, "horizonCol");
+    c_v_zen  = rsxVertexProgramGetConst(vp, "zenithCol");
 
     rsxFragmentProgramGetUCode(fp, &fp_ucode, &sz);
     fp_buf = (u32 *)rsxMemalign(64, sz);
@@ -380,7 +393,12 @@ void aircraft_draw(const Flight *f, const Camera *cam, const Mat4 *proj,
     eye[3] = hor[3] = sun[3] = suncol[3] = zen[3] = 0.0f;
 
     rsxLoadVertexProgram(ctx, vp, vp_ucode);
-    if (c_mvp) rsxSetVertexProgramParameter(ctx, vp, c_mvp, mvp.m);
+    if (c_mvp)    rsxSetVertexProgramParameter(ctx, vp, c_mvp, mvp.m);
+    if (c_v_eye)  rsxSetVertexProgramParameter(ctx, vp, c_v_eye, eye);
+    if (c_v_sun)  rsxSetVertexProgramParameter(ctx, vp, c_v_sun, sun);
+    if (c_v_scol) rsxSetVertexProgramParameter(ctx, vp, c_v_scol, suncol);
+    if (c_v_hor)  rsxSetVertexProgramParameter(ctx, vp, c_v_hor, hor);
+    if (c_v_zen)  rsxSetVertexProgramParameter(ctx, vp, c_v_zen, zen);
 
     if (c_eye)    rsxSetFragmentProgramParameter(ctx, fp, c_eye, eye, fp_off, GCM_LOCATION_RSX);
     if (c_hor)    rsxSetFragmentProgramParameter(ctx, fp, c_hor, hor, fp_off, GCM_LOCATION_RSX);

@@ -82,6 +82,26 @@ static float axis_norm(unsigned char raw)
     return 0.0f;
 }
 
+/* Bir cubugun iki ekseni birlikte cozulur, cunku "analog verisi hic gelmiyor"
+ * durumu ancak ikisine birden bakarak anlasilir: her iki eksen de tam 0 ise
+ * cubuk sol-ust koseye tam dayanmis degil, ortam analog gondermiyor demektir.
+ *
+ * Bu koruma once yalnizca d-pad sentezine uygulanmisti; eksenler koşulsuz
+ * okundugu icin RPCS3 klavye modunda oyun acilir acilmaz axis_lx -1.0
+ * takiliyordu. Sonuc: 'a' tusu hicbir sey degistirmedigi icin olusuz
+ * gorunuyor, 'd' tusuna basildiginda emulator gercek analog gondermeye
+ * basliyor ve merkez 128e oturuyor - ancak ondan sonra 'a' calisiyor. */
+static void axis_pair(unsigned char h, unsigned char v, float *ox, float *oy)
+{
+    if (h == 0 && v == 0) {
+        *ox = 0.0f;
+        *oy = 0.0f;
+        return;
+    }
+    *ox = axis_norm(h);
+    *oy = axis_norm(v);
+}
+
 void input_update(void)
 {
     padData data;
@@ -120,10 +140,8 @@ void input_update(void)
             cur_btn[i] = pack(&data);
 
             if (i == 0) {
-                axis_lx = axis_norm(data.ANA_L_H);
-                axis_ly = axis_norm(data.ANA_L_V);
-                axis_rx = axis_norm(data.ANA_R_H);
-                axis_ry = axis_norm(data.ANA_R_V);
+                axis_pair(data.ANA_L_H, data.ANA_L_V, &axis_lx, &axis_ly);
+                axis_pair(data.ANA_R_H, data.ANA_R_V, &axis_rx, &axis_ry);
             }
         }
         /* data.len == 0: cur_btn ve eksenler oldugu gibi birakilir */
