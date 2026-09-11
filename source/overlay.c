@@ -11,11 +11,11 @@
 #include "overlay_vpo.h"
 #include "overlay_fpo.h"
 
-/* HUD ve menu, ekran tamponuna CPU ile yazilarak degil GPU'ya cizdirilerek
- * olusturulur. Sebep: emulator (ve genel olarak RSX) o an bagli olan render
- * hedefine CPU'dan yazilmasini kabul etmiyor ("Cannot invalidate a currently
- * bound render target"). Bu yuzden tum dikdortgenler bir tamponda toplanip
- * kare sonunda tek cizim cagrisiyla gonderilir. */
+/* The HUD and menu are not written into the framebuffer by the CPU but
+ * drawn by the GPU. The reason: the emulator (and RSX in general) refuses
+ * CPU writes to the currently bound render target ("Cannot invalidate a
+ * currently bound render target"). So every primitive is collected in a
+ * buffer and sent in one draw call at the end of the frame. */
 
 /* Budgets. Text is now triangle meshes (about 57 vertices and 250 indices
  * per glyph), so vertices and indices are counted separately and indices are
@@ -25,13 +25,13 @@
 #define MAX_INDICES 240000
 
 typedef struct {
-    float x, y, z;      /* clip uzayi konumu */
-    float r, g, b;      /* renk */
-    float a;            /* saydamlik      -> TEXCOORD0.x */
-    float shape;        /* sekil modu     -> TEXCOORD0.y */
-    float u, v;         /* kose UV        -> TEXCOORD0.zw */
-    float inner;        /* halka ic yari. -> TEXCOORD1.x */
-    float pad;          /* hizalama */
+    float x, y, z;      /* clip-space position */
+    float r, g, b;      /* colour */
+    float a;            /* opacity        -> TEXCOORD0.x */
+    float shape;        /* shape          -> TEXCOORD0.y */
+    float u, v;         /* corner UV      -> TEXCOORD0.zw */
+    float inner;        /* ring inner rad -> TEXCOORD1.x */
+    float pad;          /* alignment */
 } OvlVertex;
 
 static OvlVertex *verts = NULL;
@@ -101,11 +101,11 @@ static void push_quad(float cx, float cy, float hw, float hh, float angle,
         return;
 
     if (vert_count + 4 > MAX_VERTS || idx_count + 6 > MAX_INDICES) {
-        overflow = 1;           /* tanidik olmayan eksik cizim yerine uyari */
+        overflow = 1;           /* flag it rather than draw something incomplete without a trace */
         return;
     }
 
-    /* kose ofsetleri (merkez etrafinda), gerekirse dondurulur */
+    /* corner offsets (around the centre), rotated if needed */
     ox[0] = -hw; oy[0] = -hh;
     ox[1] =  hw; oy[1] = -hh;
     ox[2] = -hw; oy[2] =  hh;
@@ -125,7 +125,7 @@ static void push_quad(float cx, float cy, float hw, float hh, float angle,
         float px = cx + ox[i] * ca - oy[i] * sa;
         float py = cy + ox[i] * sa + oy[i] * ca;
 
-        /* sanal 1280x720 -> clip uzayi (-1..1), y yukari pozitif */
+        /* virtual 1280x720 -> clip space (-1..1), y positive up */
         v[i].x = px / OVL_W * 2.0f - 1.0f;
         v[i].y = 1.0f - py / OVL_H * 2.0f;
         v[i].z = 0.0f;
@@ -245,7 +245,7 @@ void overlay_flush(void)
     /* Glyph triangles come out of the triangulator in either winding. */
     rsx3d_set_culling(0);
 
-    /* saydamlik icin harmanlama, derinlik testi kapali (her sey en ustte) */
+    /* blending for transparency, depth test off (everything on top) */
     rsxSetBlendEnable(ctx, GCM_TRUE);
     rsxSetBlendFunc(ctx, GCM_SRC_ALPHA, GCM_ONE_MINUS_SRC_ALPHA,
                     GCM_SRC_ALPHA, GCM_ONE_MINUS_SRC_ALPHA);

@@ -1,11 +1,12 @@
-/* Zemin yuzeyleri - vertex programi.
- * Renk vertex ozniteliginde tasinir; TEXCOORD0 parlaklik ve yuzey tipini,
- * doku koordinati ise dunya olceginde tekrar eden UV'yi tasir. */
+/* Ground surfaces - vertex program.
+ * Colour travels in a vertex attribute; TEXCOORD0 carries brightness and
+ * surface type, and the texture coordinate carries a UV that repeats at
+ * world scale. */
 void main
 (
 	float3 vertexPosition : POSITION,
-	float3 vertexNormal   : NORMAL,     /* renk */
-	float4 vertexTexcoord : TEXCOORD0,  /* x: parlaklik, y: yuzey tipi, zw: uv */
+	float3 vertexNormal   : NORMAL,     /* colour */
+	float4 vertexTexcoord : TEXCOORD0,  /* x: brightness, y: surface type, zw: uv */
 
 	uniform float4x4 mvpMatrix,
 

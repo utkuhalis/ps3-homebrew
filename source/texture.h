@@ -1,27 +1,29 @@
 #ifndef TEXTURE_H
 #define TEXTURE_H
 
-/* RSX doku destegi.
+/* RSX texture support.
  *
- * Dokular tools/make_textures.py ile "BWT1" bicimine cevrilip EBOOT'a
- * gomulur: 2'nin kuvveti boyut, ARGB big-endian, tam mip zinciri.
+ * Textures are converted to the "BWT1" format by tools/make_textures.py
+ * and embedded in the EBOOT: power-of-two sizes, big-endian ARGB, full mip
+ * chain.
  *
- * Modul acilista tum dokulari RSX belleğine kopyalar ve her biri icin bir
- * gcmTexture tanimlar; cizim sirasinda yalnizca texture_bind cagrilir. */
+ * At start-up the module copies every texture into RSX memory and sets up
+ * a gcmTexture for each; drawing only calls texture_bind. */
 
 #define TEXTURE_MAX 8
 
-/* Gomulu doku paketini cozumler ve RSX'e yukler. 0: basarili */
+/* Parses the embedded texture pack and uploads it to RSX. 0: success */
 int texture_init(void);
 
-/* Ada gore doku indeksi; bulunamazsa -1 */
+/* Texture index by name; -1 if not found */
 int texture_find(const char *name);
 
-/* Dokuyu bir doku birimine baglar (fragment shader'daki sampler sirasi).
- * tile: doku kac kez tekrarlansin (UV carpani shader'a ayrica verilir). */
+/* Binds a texture to a texture unit (sampler order in the fragment shader).
+ * tile: how many times the texture repeats (the UV multiplier is passed to
+ * the shader separately). */
 void texture_bind(int unit, int index);
 
-/* Yuklenen doku sayisi (tani icin) */
+/* Number of loaded textures (diagnostics) */
 int texture_count(void);
 
 #endif

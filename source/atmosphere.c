@@ -21,7 +21,7 @@ static void scale3(float v[3], float s)
     v[0] *= s; v[1] *= s; v[2] *= s;
 }
 
-/* Renk grileşmesi: hava bozdukca renkler doygunlugunu kaybedip gri tona kayar */
+/* Greying: as the weather worsens, colours lose saturation and drift to grey */
 static void desaturate(float v[3], float amount)
 {
     float gray = (v[0] + v[1] + v[2]) / 3.0f;
@@ -33,19 +33,19 @@ static void desaturate(float v[3], float amount)
 
 void atmosphere_compute(Atmosphere *a, Weather w, TimeOfDay t)
 {
-    /* --- once gun saati: gunes yonu ve temel renkler --- */
+    /* --- time of day first: sun direction and base colours --- */
     switch (t) {
     case TIME_SUNSET:
-        set3(a->sun_dir, 0.62f, 0.06f, -0.78f);     /* ufka cok yakin */
-        set3(a->sun_color, 1.00f, 0.62f, 0.32f);    /* turuncu */
+        set3(a->sun_dir, 0.62f, 0.06f, -0.78f);     /* very close to the horizon */
+        set3(a->sun_color, 1.00f, 0.62f, 0.32f);    /* orange */
         set3(a->horizon, 0.95f, 0.62f, 0.38f);
         set3(a->zenith, 0.22f, 0.26f, 0.55f);
         a->water_dark = 0.85f;
         break;
 
     case TIME_NIGHT:
-        set3(a->sun_dir, 0.30f, 0.42f, -0.86f);     /* ay */
-        set3(a->sun_color, 0.62f, 0.70f, 0.92f);    /* soguk beyaz */
+        set3(a->sun_dir, 0.30f, 0.42f, -0.86f);     /* moon */
+        set3(a->sun_color, 0.62f, 0.70f, 0.92f);    /* cold white */
         set3(a->horizon, 0.07f, 0.10f, 0.19f);
         set3(a->zenith, 0.010f, 0.020f, 0.070f);
         a->water_dark = 0.30f;
@@ -63,7 +63,7 @@ void atmosphere_compute(Atmosphere *a, Weather w, TimeOfDay t)
 
     normalize3(a->sun_dir);
 
-    /* --- varsayilanlar (guneşli hava) --- */
+    /* --- defaults (sunny weather) --- */
     a->cloud_low = 0.50f;
     a->cloud_high = 0.78f;
     a->cloud_bright = 1.00f;
@@ -73,10 +73,10 @@ void atmosphere_compute(Atmosphere *a, Weather w, TimeOfDay t)
     a->rain = 0.0f;
     a->lightning = 0.0f;
 
-    /* --- hava durumu: temel degerleri degistirir --- */
+    /* --- weather: modifies the base values --- */
     switch (w) {
     case WEATHER_CLOUDY:
-        a->cloud_low = 0.30f;           /* esik dusuk -> gokyuzu daha kapali */
+        a->cloud_low = 0.30f;           /* lower threshold -> more overcast sky */
         a->cloud_high = 0.62f;
         a->cloud_bright = 0.88f;
         a->fog_distance = 1200.0f;
@@ -106,28 +106,28 @@ void atmosphere_compute(Atmosphere *a, Weather w, TimeOfDay t)
         a->cloud_low = 0.35f;
         a->cloud_high = 0.70f;
         a->cloud_bright = 0.92f;
-        a->fog_distance = 320.0f;       /* asil etki burada */
+        a->fog_distance = 320.0f;       /* the main effect is here */
         desaturate(a->horizon, 0.70f);
         desaturate(a->zenith, 0.75f);
-        /* sis gokyuzunu ufuk rengine yaklastirir */
+        /* fog pulls the sky towards the horizon colour */
         a->zenith[0] = a->zenith[0] * 0.4f + a->horizon[0] * 0.6f;
         a->zenith[1] = a->zenith[1] * 0.4f + a->horizon[1] * 0.6f;
         a->zenith[2] = a->zenith[2] * 0.4f + a->horizon[2] * 0.6f;
-        a->wave_scale = 0.70f;          /* sisli havada deniz durgun */
+        a->wave_scale = 0.70f;          /* the sea is calm in fog */
         a->wave_length = 1.00f;
         break;
 
     case WEATHER_STORMY:
         a->cloud_low = 0.10f;
         a->cloud_high = 0.42f;
-        a->cloud_bright = 0.42f;        /* koyu bulutlar */
+        a->cloud_bright = 0.42f;        /* dark clouds */
         a->fog_distance = 600.0f;
         desaturate(a->horizon, 0.65f);
         desaturate(a->zenith, 0.60f);
         scale3(a->horizon, 0.48f);
         scale3(a->zenith, 0.40f);
-        a->wave_scale = 1.85f;          /* azgin deniz */
-        a->wave_length = 1.75f;   /* uzun ve yuksek dalgalar */
+        a->wave_scale = 1.85f;          /* rough sea */
+        a->wave_length = 1.75f;   /* long, high waves */
         a->water_dark *= 0.55f;
         a->rain = 1.0f;
         a->lightning = 1.0f;

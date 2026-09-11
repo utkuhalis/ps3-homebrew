@@ -2,9 +2,9 @@
 
 #include "mesh.h"
 
-/* Big-endian okuyucular. PPU zaten big-endian oldugu icin bu fonksiyonlar
- * dogrudan kopyalar; ayni kod host testinde (little-endian x86/arm) de
- * dogru calissin diye bayt bayt birlestiriliyor. */
+/* Big-endian readers. The PPU is big-endian already, so these just copy;
+ * they assemble byte by byte so the same code also works in the host test
+ * (little-endian x86/arm). */
 static unsigned int be32(const unsigned char *p)
 {
     return ((unsigned int)p[0] << 24) | ((unsigned int)p[1] << 16) |
@@ -56,13 +56,13 @@ int mesh_load(Mesh *m, const void *data, unsigned int size)
         mp->idx = (const unsigned short *)(const void *)(p + off);
         off += mp->index_count * 2;
 
-        /* Uretici her parca sonunu 4 bayta hizaliyor (PPU hizasiz float
-         * okuyamaz). Bu dolgu burada da atlanmazsa ikinci parcadan itibaren
-         * offset kayar ve dosya bozuk gorunur. */
+        /* The generator pads the end of every part to 4 bytes (the PPU cannot read
+         * unaligned floats). Unless that padding is skipped here too, the offset
+         * drifts from the second part on and the file looks corrupt. */
         off = (off + 3u) & ~3u;
     }
 
-    /* sinir kutusu: kamera mesafesi ve olcek denetimi icin */
+    /* bounding box: for camera distance and scale checks */
     for (i = 0; i < m->part_count; i++) {
         const MeshPart *mp = &m->part[i];
         unsigned int v;

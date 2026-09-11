@@ -3,11 +3,10 @@
 
 #include "camera.h"
 
-/* Gorev listesi.
+/* Objective list.
  *
- * Durum mantigi donanimdan bagimsizdir (birim testli): her gorevin bir
- * kontrol kurali vardir ve kamera durumuna gore tamamlanir. Pistler
- * eklendiginde kurallar gercek konum hedeflerine baglanacak. */
+ * The state logic is hardware independent (unit tested): every objective
+ * has a check rule and completes from the current state. */
 
 #define OBJ_COUNT 4
 
@@ -18,7 +17,7 @@ typedef struct {
 
 void objectives_init(Objectives *o);
 
-/* Kamera durumuna gore gorevleri gunceller */
+/* Updates the objectives from the current state */
 void objectives_update(Objectives *o, const Camera *cam, float speed_kmh);
 
 void objectives_draw(const Objectives *o);

@@ -4,27 +4,27 @@
 #include <ppu-types.h>
 #include <rsx/rsx.h>
 
-/* RSX 3D katmani: ekran kurulumu, derinlik tamponu, cizim ortami, flip.
- * Ust katmanlar (scene) gcm ayrintilarini bilmek zorunda kalmasin diye
- * context ve olculer buradan alinir. */
+/* RSX 3D layer: display setup, depth buffer, draw state, flip.
+ * The context and dimensions come from here so the layers above (scene)
+ * do not need to know gcm details. */
 
 int   rsx3d_init(void);
 void  rsx3d_exit(void);
 
-/* Kare basi: render hedefini bagla, ekrani temizle, cizim ortamini kur. */
+/* Start of frame: bind the render target, clear the screen, set up draw state. */
 void  rsx3d_begin_frame(u32 clear_color);
 void  rsx3d_end_frame(void);
 
 float rsx3d_aspect(void);
 gcmContextData *rsx3d_context(void);
 
-/* Ekran goruntusunu PPM olarak yazar (teshis) */
+/* Writes a screenshot as a PPM (diagnostics) */
 int rsx3d_capture(const char *path);
 
-/* Kati geometri icin arka yuz elemesi (ucak, pist) */
+/* Backface culling for solid geometry (aircraft, runway) */
 void rsx3d_set_culling(int enable);
 
-/* Ekran olculeri (2D bindirmenin olcekleme icin ihtiyaci var) */
+/* Screen dimensions (the 2D overlay needs them for scaling) */
 u32  rsx3d_width(void);
 u32  rsx3d_height(void);
 

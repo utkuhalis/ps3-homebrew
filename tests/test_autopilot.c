@@ -1,6 +1,6 @@
-/* Otopilot testleri: gercek ucus modeliyle kapali dongu calistirilir.
- * Otopilot ucaga dogrudan dokunmadigi, yalnizca kumanda girdisi urettigi
- * icin bu testler ayni zamanda ucus modelinin kararliligini da olcer. */
+/* Autopilot tests: run in a closed loop with the real flight model.
+ * The autopilot never touches the aircraft directly, it only produces
+ * control inputs, so these tests also measure the flight model's stability. */
 
 #include <stdio.h>
 #include <math.h>
@@ -17,7 +17,7 @@ static void check(int cond, const char *what)
     }
 }
 
-/* Ucagi havada, duz ucusta baslatir */
+/* Starts the aircraft in the air, in level flight */
 static void airborne(Flight *f, float alt, float heading, float speed)
 {
     float pos[3];
@@ -48,51 +48,51 @@ int main(void)
     Autopilot ap;
     Flight f;
 
-    /* --- aci sarmasi --- */
+    /* --- angle wrapping --- */
     check(fabsf(autopilot_wrap_angle(7.0f) - (7.0f - 6.28318531f)) < 0.001f,
-          "aci sarmasi pozitif tarafta dogru");
+          "angle wrap correct on the positive side");
     check(fabsf(autopilot_wrap_angle(-7.0f) - (-7.0f + 6.28318531f)) < 0.001f,
-          "aci sarmasi negatif tarafta dogru");
-    printf("test: aci sarmasi dogru\n");
+          "angle wrap correct on the negative side");
+    printf("test: angle wrapping correct\n");
 
-    /* --- devrede degilken ucaga dokunmaz --- */
+    /* --- does not touch the aircraft while disengaged --- */
     autopilot_init(&ap);
     airborne(&f, 500.0f, 0.0f, 90.0f);
     f.in_pitch = 0.77f;
     autopilot_update(&ap, &f, 1.0f / 60.0f);
-    check(f.in_pitch == 0.77f, "kapali otopilot girdiye dokunmuyor");
-    printf("test: kapaliyken kumandaya karismiyor\n");
+    check(f.in_pitch == 0.77f, "disengaged autopilot leaves the input alone");
+    printf("test: does not interfere with the controls while off\n");
 
-    /* --- irtifa tutuyor --- */
+    /* --- holds altitude --- */
     autopilot_init(&ap);
     airborne(&f, 3000.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     run(&ap, &f, 60);
     check(fabsf(f.pos[1] - 3000.0f) < 120.0f,
-          "irtifa 60 saniye boyunca korunuyor");
-    printf("test: irtifa tutuluyor (sapma %.1f m)\n", fabsf(f.pos[1] - 3000.0f));
+          "altitude held for 60 seconds");
+    printf("test: altitude held (deviation %.1f m)\n", fabsf(f.pos[1] - 3000.0f));
 
-    /* --- hedef irtifaya tirmaniyor --- */
+    /* --- climbs to the target altitude --- */
     autopilot_init(&ap);
     airborne(&f, 2500.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     autopilot_adjust_alt(&ap, 500.0f);
     run(&ap, &f, 120);
-    check(f.pos[1] > 2900.0f, "hedef irtifaya tirmaniyor");
-    printf("test: tirmanis komutu calisiyor (%.0f m)\n", f.pos[1]);
+    check(f.pos[1] > 2900.0f, "climbs to the target altitude");
+    printf("test: climb command works (%.0f m)\n", f.pos[1]);
 
-    /* --- yon tutuyor ve donuyor --- */
+    /* --- holds and changes heading --- */
     autopilot_init(&ap);
     airborne(&f, 3000.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
     autopilot_adjust_heading(&ap, 1.20f);
     run(&ap, &f, 90);
     check(fabsf(autopilot_wrap_angle(f.yaw - 1.20f)) < 0.20f,
-          "hedef yone donuyor");
-    printf("test: yon donusu tamamlaniyor (hata %.3f rad)\n",
+          "turns to the target heading");
+    printf("test: heading change completes (error %.3f rad)\n",
            fabsf(autopilot_wrap_angle(f.yaw - 1.20f)));
 
-    /* --- yatis sinirini asmiyor --- */
+    /* --- does not exceed the bank limit --- */
     autopilot_init(&ap);
     airborne(&f, 3000.0f, 0.0f, 200.0f);
     autopilot_engage(&ap, &f);
@@ -108,20 +108,20 @@ int main(void)
                 max_bank = fabsf(f.roll);
         }
         check(max_bank < AP_MAX_BANK_RAD + 0.12f,
-              "otopilot yatis sinirini asmiyor");
-        printf("test: yatis siniri korunuyor (en fazla %.3f rad)\n", max_bank);
+              "autopilot stays within the bank limit");
+        printf("test: bank limit respected (at most %.3f rad)\n", max_bank);
     }
 
-    /* --- suya dalmiyor --- */
+    /* --- does not dive into the water --- */
     autopilot_init(&ap);
     airborne(&f, 900.0f, 0.5f, 190.0f);
     autopilot_engage(&ap, &f);
     run(&ap, &f, 120);
-    check(f.pos[1] > 400.0f, "otopilot ucagi denize indirmiyor");
-    printf("test: guvenli irtifa korunuyor\n");
+    check(f.pos[1] > 400.0f, "autopilot does not put the aircraft in the sea");
+    printf("test: safe altitude kept\n");
 
     if (failures == 0)
-        printf("\n9 kontrol, 0 hata\n");
+        printf("\n9 checks, 0 failures\n");
     else
         printf("\n%d HATA\n", failures);
     return failures ? 1 : 0;

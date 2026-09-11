@@ -33,9 +33,9 @@
 
 SYS_PROCESS_PARAM(1001, 0x100000)
 
-/* Dar gorus acisi (telefoto) nesneleri buyutur ve mesafeleri sikistirir;
- * ucagin ve denizin olcegi bu sayede hissediliyor. 60 derece her seyi
- * uzaklastirip oyuncak gibi gosteriyordu. */
+/* A narrow field of view (telephoto) enlarges objects and compresses
+ * distances; that is how the scale of the aircraft and the sea comes
+ * across. 60 degrees pushed everything away and made it look like a toy. */
 #define FOV_DEG   46.0f
 #define Z_NEAR     1.0f
 #define Z_FAR   6000.0f
@@ -70,36 +70,36 @@ int main(int argc, const char *argv[])
     (void)argv;
 
     ps3log_open();
-    ps3log("basicwater basliyor");
+    ps3log("basicwater starting");
 
     rc = rsx3d_init();
-    ps3log("rsx3d_init -> %d (ekran %dx%d)", rc,
+    ps3log("rsx3d_init -> %d (screen %dx%d)", rc,
            (int)rsx3d_width(), (int)rsx3d_height());
     if (rc < 0) {
-        ps3log("DURDU: rsx3d_init basarisiz");
+        ps3log("STOPPED: rsx3d_init failed");
         ps3log_close();
         return 1;
     }
 
 
     rc = aircraft_init();
-    ps3log("aircraft_init -> %d (%u ucgen)", rc,
+    ps3log("aircraft_init -> %d (%u triangles)", rc,
            aircraft_triangle_count());
     if (rc < 0) {
-        printf("HATA: aircraft_init basarisiz (%d)\n", rc);
+        printf("ERROR: aircraft_init failed (%d)\n", rc);
         rsx3d_exit();
         return 1;
     }
 
     rc = texture_init();
-    ps3log("texture_init -> %d (%d doku)", rc, texture_count());
-    /* Doku yuklenemezse oyun dokusuz devam eder; durdurmaya degmez. */
+    ps3log("texture_init -> %d (%d textures)", rc, texture_count());
+    /* If textures fail to load the game carries on without them; not worth stopping for. */
 
     rc = world_init_all();
-    ps3log("world_init_all -> %d (%d dunya, secili: %s)", rc, world_count(),
+    ps3log("world_init_all -> %d (%d worlds, selected: %s)", rc, world_count(),
            world_current()->name);
     if (rc < 0) {
-        printf("HATA: world_init_all basarisiz (%d)\n", rc);
+        printf("ERROR: world_init_all failed (%d)\n", rc);
         rsx3d_exit();
         return 1;
     }
@@ -107,19 +107,19 @@ int main(int argc, const char *argv[])
     rc = overlay_init();
     ps3log("overlay_init -> %d", rc);
     if (rc < 0) {
-        printf("HATA: overlay_init basarisiz (%d)\n", rc);
+        printf("ERROR: overlay_init failed (%d)\n", rc);
         rsx3d_exit();
         return 1;
     }
 
     rc = audio_init();
     ps3log("audio_init -> %d", rc);
-    /* Ses acilamazsa oyun sessiz devam eder; oyunu durdurmaya degmez. */
+    /* If audio cannot be opened the game carries on silently; not worth stopping for. */
 
-    ps3log("tum baslatmalar tamam, ana donguye giriliyor");
+    ps3log("all init done, entering the main loop");
 
     if (input_init() != 0) {
-        printf("HATA: input_init basarisiz\n");
+        printf("ERROR: input_init failed\n");
         rsx3d_exit();
         return 1;
     }
@@ -132,8 +132,8 @@ int main(int argc, const char *argv[])
     autopilot_init(&ap);
     atmosphere_compute(&atm, menu.weather, menu.time);
     objectives_init(&objs);
-    /* Pistte, motor rolantide basla: kalkisi oyuncu yapar.
-     * Baslangic noktasi secili dunyadan gelir. */
+    /* Start on the runway with the engine at idle: the player makes the
+     * takeoff. The starting point comes from the selected world. */
     {
         float start_xz[2], heading, offset;
 
@@ -153,12 +153,12 @@ int main(int argc, const char *argv[])
         if (input_pressed(0, PAD_SELECT))
             gamemenu_toggle(&menu);
 
-        /* Yuz tuslarinin bakis yedegi yalnizca serbest kamerada aciktir;
-         * ucus modunda ayni tuslar flap/spoiler/takim/kamera icin kullanilir. */
+        /* The face-button look fallback is only on in the free camera; in the
+         * flight modes the same buttons are flaps/spoiler/gear/camera. */
         input_set_look_keys(!menu.open && cam_mode == CAM_FREE);
 
         if (menu.open) {
-            /* Menu acikken kamera dondurulur; girdi menuye gider. */
+            /* With the menu open the camera is frozen; input goes to the menu. */
             if (input_pressed(0, PAD_UP))    gamemenu_move(&menu, -1);
             if (input_pressed(0, PAD_DOWN))  gamemenu_move(&menu,  1);
             if (input_pressed(0, PAD_LEFT))  gamemenu_adjust(&menu, -1);
@@ -172,12 +172,12 @@ int main(int argc, const char *argv[])
         if (input_pressed(0, PAD_START))
             should_exit = 1;
 
-        /* Sol analog: ileri/geri + yana kayma. Y ekseni asagi pozitif oldugu
-         * icin ileri = negatif Y. */
+        /* Left stick: forward/back + strafe. The Y axis is positive down, so
+         * forward = negative Y. */
         forward = -input_axis_left_y();
         strafe  =  input_axis_left_x();
 
-        /* Sag analog: bakis. Yukari bakmak icin yine isaret cevrilir. */
+        /* Right stick: look. The sign is flipped again so up looks up. */
         yaw_in   =  input_axis_right_x();
         pitch_in = -input_axis_right_y();
 
@@ -192,13 +192,13 @@ int main(int argc, const char *argv[])
             yaw_in = pitch_in = 0.0f;
         }
 
-        /* --- ucus kumandalari (menu kapaliyken) --- */
+        /* --- flight controls (menu closed) --- */
         if (!menu.open) {
             float stick_p = input_flight_pitch();
             float stick_r = input_flight_roll();
 
-            /* R3: otopilot ac/kapa. Kumandaya dokunmak da otopilotu birakir -
-             * gercek ucakta oldugu gibi pilot her an devralabilir. */
+            /* R3: autopilot on/off. Touching the controls also disengages it - as on
+             * a real aircraft, the pilot can take over at any moment. */
             if (input_pressed(0, PAD_R3))
                 autopilot_toggle(&ap, &plane);
 
@@ -211,9 +211,9 @@ int main(int argc, const char *argv[])
             plane.in_roll  = stick_r;
             plane.in_yaw   = 0.0f;
 
-            /* Gaz: hem tetikler hem omuz tuslari. Emulatorun klavye
-             * eslemesinde L2/R2 her zaman rahat erisilebilir olmadigi icin
-             * L1/R1 de ayni isi yapar. */
+            /* Throttle: both the triggers and the shoulder buttons. L2/R2 are not
+             * always easy to reach in the emulator's keyboard mapping, so L1/R1 do
+             * the same job. */
             if (input_held(0, PAD_R2) || input_held(0, PAD_R1))
                 plane.throttle += 0.6f * DT;
             if (input_held(0, PAD_L2) || input_held(0, PAD_L1))
@@ -221,17 +221,17 @@ int main(int argc, const char *argv[])
             if (plane.throttle < 0.0f) plane.throttle = 0.0f;
             if (plane.throttle > 1.0f) plane.throttle = 1.0f;
 
-            /* KARE: flap kolunu bir kademe ilerlet (0 -> 1/3 -> 2/3 -> tam
-             * -> 0). Yuzeyler bu hedefe motor hiziyla ilerler. */
+            /* SQUARE: move the flap lever one detent (0 -> 1/3 -> 2/3 -> full -> 0).
+             * The surfaces follow the target at motor speed. */
             if (input_pressed(0, PAD_SQUARE)) {
                 plane.flap_target += 0.34f;
                 if (plane.flap_target > 1.01f)
                     plane.flap_target = 0.0f;
             }
 
-            /* UCGEN: hava freni kolu. Basili tutmak yerine kademe kademe
-             * ilerler ve OYLE KALIR: yarim (ucusta) -> tam (inişte) ->
-             * kapali. Gercek ucakta da kol bir konumda durur. */
+            /* TRIANGLE: speed brake lever. Instead of hold-to-open it steps through
+             * detents and STAYS there: half (in flight) -> full (landing) -> retracted.
+             * On a real aircraft the lever also stays where it is put. */
             if (input_pressed(0, PAD_TRIANGLE)) {
                 if (plane.spoiler_target < 0.01f)
                     plane.spoiler_target = 0.5f;
@@ -241,26 +241,26 @@ int main(int argc, const char *argv[])
                     plane.spoiler_target = 0.0f;
             }
 
-            /* Yerde tam hava freni ayni zamanda tekerlek frenidir. */
+            /* On the ground, full speed brake also means wheel brakes. */
             plane.brakes = (plane.on_ground && plane.spoiler > 0.5f);
 
-            /* CARPI: inis takimi ac/kapa */
+            /* CROSS: landing gear up/down */
             if (input_pressed(0, PAD_CROSS))
                 plane.gear_down = !plane.gear_down;
 
-            /* YUVARLAK: kamera modu (takip / kokpit / kanatlar / kuyruk / serbest) */
+            /* CIRCLE: camera mode (chase / cockpit / wings / tail / free) */
             if (input_pressed(0, PAD_CIRCLE)) {
                 cam_mode = (CamMode)((cam_mode + 1) % CAM_MODE_COUNT);
                 flightcam_orbit_reset();
             }
 
-            /* Sol analog: takip modunda ucagin cevresinde don.
-             * Kokpit ve serbest modda kendi islevini korur. */
+            /* Left stick: orbit around the aircraft in the chase mode.
+             * In cockpit and free mode it keeps its own function. */
             if (cam_mode == CAM_CHASE) {
                 float ox = input_cam_x();
                 float oy = input_cam_y();
-                /* Yakinlasma L3'te: yon tuslari zaten burun kumandasinin
-                 * yedegi, ikisini ayni tusa baglamak catisirdi. */
+                /* Zoom is on L3: the d-pad is already the pitch fallback, and binding both
+                 * to the same keys would clash. */
                 float zoom = input_held(0, PAD_L3) ? -1.0f : 0.0f;
 
                 if (input_held(0, PAD_L3) && input_held(0, PAD_TRIANGLE))
@@ -272,11 +272,11 @@ int main(int argc, const char *argv[])
             plane.in_pitch = plane.in_roll = plane.in_yaw = 0.0f;
         }
 
-        /* menuden secilen hava/saat her karede sahneye yansitilir */
+        /* the weather/time chosen in the menu is applied to the scene every frame */
         atmosphere_compute(&atm, menu.weather, menu.time);
 
-        /* Otopilot kumanda girdilerini oyuncunun yerine uretir; fizik
-         * degismez, ucak ayni modele tabidir. */
+        /* The autopilot produces control inputs in the player's place; the
+         * physics does not change, the aircraft obeys the same model. */
         prof_begin(PROF_FLIGHT);
         autopilot_update(&ap, &plane, DT);
 
@@ -285,9 +285,8 @@ int main(int argc, const char *argv[])
         if (cam_mode == CAM_FREE) {
             camera_update(&cam, forward, strafe, updown, yaw_in, pitch_in, DT);
 
-            /* Serbest kamera kendi icinde yalnizca deniz seviyesini biliyor;
-             * pist yuzeyini ve ucagi da hesaba katmasi icin ayni engel
-             * kontrolunden gecirilir. */
+            /* The free camera itself only knows about sea level; it goes through the
+             * same obstacle check so the runway surface and the aircraft count too. */
             {
                 float g_cam = flightcam_ground_at(&plane, cam.pos[0],
                                                   cam.pos[2]);
@@ -308,13 +307,13 @@ int main(int argc, const char *argv[])
 
         time_sec = (float)(frames++) / 60.0f;
 
-        /* ilk karelerde nereye kadar gidildigi kayda gecer */
+        /* log how far the first frames get */
         if (frames == 1)
-            ps3log("ilk kare basliyor");
+            ps3log("first frame starting");
         else if (frames == 2)
-            ps3log("ilk kare tamamlandi (cizim ve flip calisiyor)");
+            ps3log("first frame done (drawing and flip work)");
         else if (frames == 120)
-            ps3log("120 kare tamamlandi, sahne akiyor");
+            ps3log("120 frames done, scene running");
 
         rsx3d_begin_frame(SKY_CLEAR_COLOR);
 
@@ -322,14 +321,13 @@ int main(int argc, const char *argv[])
         world_current()->draw(&cam, &proj, time_sec, &atm);
         prof_end(PROF_SCENE);
 
-        /* kokpit gorusunde kendi ucagimizi cizmiyoruz */
+        /* our own aircraft is not drawn in the cockpit view */
         prof_begin(PROF_AIRCRAFT);
         if (cam_mode != CAM_COCKPIT)
             aircraft_draw(&plane, &cam, &proj, &atm);
         prof_end(PROF_AIRCRAFT);
 
-        /* 2D bindirme: dikdortgenler toplanir, sahnenin ustune tek
-         * cizim cagrisiyla gonderilir */
+        /* 2D overlay: primitives are collected and sent over the scene in a single draw call */
         prof_begin(PROF_OVERLAY);
         overlay_begin();
         weatherfx_draw(&atm, time_sec);
@@ -359,12 +357,12 @@ int main(int argc, const char *argv[])
         prof_end(PROF_FLIP);
         prof_frame_end();
 
-        /* Olcumu periyodik olarak kayda da yaz: gercek PS3'te ekrani
-         * okumak zor, kayit FTP ile alinabiliyor. */
+        /* Write the measurements to the log periodically too: the screen is hard
+         * to read on a real PS3, the log can be fetched over FTP. */
         if (frames % 600 == 0 && frames > 0)
-            ps3log("kare %.2f ms (%.0f fps) | flight %.2f model %.2f "
+            ps3log("frame %.2f ms (%.0f fps) | flight %.2f model %.2f "
                    "scene %.2f runway %.2f plane %.2f hud %.2f flip %.2f "
-                   "| ucgen %u rect %u",
+                   "| tris %u rect %u",
                    prof_frame_us() / 1000.0f, prof_fps(),
                    prof_avg_us(PROF_FLIGHT) / 1000.0f,
                    prof_avg_us(PROF_MODEL) / 1000.0f,
@@ -377,7 +375,7 @@ int main(int argc, const char *argv[])
     }
 
     audio_exit();
-    ps3log("cikis: %lu kare cizildi", frames);
+    ps3log("exit: %lu frames drawn", frames);
     ps3log_close();
 
     sysUtilUnregisterCallback(SYSUTIL_EVENT_SLOT0);

@@ -16,7 +16,7 @@
 #define COL_DONE   RGB(120, 220, 140)
 #define COL_BOX    RGB(180, 190, 205)
 
-/* Gorev metinleri ve kurallari tek yerde dursun diye ayni siradalar */
+/* Objective texts and rules are in the same order so they live in one place */
 static const char *TEXT[OBJ_COUNT] = {
     "Find the departure runway",
     "Climb above 1000 m",
@@ -24,7 +24,7 @@ static const char *TEXT[OBJ_COUNT] = {
     "Approach the arrival runway"
 };
 
-/* Bir noktaya yatay uzaklik (yukseklik farki sayilmaz) */
+/* Horizontal distance to a point (height difference ignored) */
 static float flat_dist(const Camera *cam, const float p[2])
 {
     float dx = cam->pos[0] - p[0];
@@ -53,7 +53,7 @@ void objectives_update(Objectives *o, const Camera *cam, float speed_kmh)
 {
     int i, n = 0;
 
-    /* Gorevler bir kez tamamlanir, geri alinmaz */
+    /* Objectives complete once and are never undone */
     if (flat_dist(cam, RUNWAY_POS[0]) < 400.0f)
         o->done[0] = 1;
 
@@ -63,7 +63,7 @@ void objectives_update(Objectives *o, const Camera *cam, float speed_kmh)
     if (speed_kmh > 200.0f)
         o->done[2] = 1;
 
-    /* inis pistine yaklasma: once kalkis pisti bulunmus olmali */
+    /* approaching the arrival runway: the departure runway must be found first */
     if (o->done[0] && flat_dist(cam, RUNWAY_POS[1]) < 400.0f)
         o->done[3] = 1;
 
@@ -87,7 +87,7 @@ void objectives_draw(const Objectives *o)
         int bx = PANEL_X + 16;
         color_t c = o->done[i] ? COL_DONE : COL_TEXT;
 
-        /* onay kutusu */
+        /* check box */
         overlay_fill_rect(bx, y + 1, 12, 12, COL_BOX);
         overlay_fill_rect(bx + 1, y + 2, 10, 10, COL_PANEL);
         if (o->done[i])

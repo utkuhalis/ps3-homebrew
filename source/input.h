@@ -1,8 +1,8 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-/* En fazla 2 kol okunur. Menude tus tekrarini onlemek icin kenar algilama
- * (input_pressed) saglanir. */
+/* Up to 2 pads are read. Edge detection (input_pressed) is provided to
+ * avoid key repeat in menus. */
 
 #define PAD_UP      (1u << 0)
 #define PAD_DOWN    (1u << 1)
@@ -29,39 +29,39 @@ void input_update(void);
 
 int  input_connected(int pad);
 int  input_held(int pad, unsigned int mask);
-int  input_pressed(int pad, unsigned int mask);   /* sadece basildigi karede */
+int  input_pressed(int pad, unsigned int mask);   /* only on the frame it was pressed */
 
-/* Dikey yon: -1 yukari, 0 sabit, +1 asagi (d-pad veya sol analog) */
+/* Vertical direction: -1 up, 0 none, +1 down (d-pad or left stick) */
 int  input_dir(int pad);
 
-/* Analog eksenler, -1.0 .. +1.0. Olu bolge uygulanmistir.
- * Y ekseni ASAGI pozitiftir (kol donanimiyla ayni yon).
- * Analog verisi gelmiyorsa (RPCS3 klavye modu) d-pad bunlari surer. */
-/* --- anlam odakli kumanda okumalari ---
+/* Analogue axes, -1.0 .. +1.0, dead zone applied.
+ * The Y axis is positive DOWN (same as the pad hardware).
+ * Without analogue data (RPCS3 keyboard mode) the d-pad drives them. */
+/* --- control reads by meaning ---
  *
- * Ucus SAG analogdan, kamera SOL analogdan surulur. Ham eksen
- * fonksiyonlarini dogrudan cagirmak yerine bunlari kullanmak, hangi cubugun
- * neyi yaptigini tek yerde tutar; ikisi bir kez birbirine karismisti.
+ * Flight is driven by the RIGHT stick, the camera by the LEFT. Using these
+ * instead of the raw axis functions keeps which stick does what in one
+ * place; the two got swapped once.
  *
- * Ucus kumandasinda yon tuslari yedek olarak calisir: emulatorun klavye
- * eslemesinde sag analog Home/End/PageDown gibi tuslara dusuyor ve oyun
- * oynanamaz hale geliyor. */
-float input_flight_pitch(void);   /* + burun yukari */
-float input_flight_roll(void);    /* + saga yatis */
+ * The d-pad works as a fallback for the flight controls: in the
+ * emulator's keyboard mapping the right stick lands on keys like
+ * Home/End/PageDown, which makes the game unplayable. */
+float input_flight_pitch(void);   /* + nose up */
+float input_flight_roll(void);    /* + bank right */
 
-/* Yorunge kamerasi: sol analog */
+/* Orbit camera: left stick */
 float input_cam_x(void);
 float input_cam_y(void);
 
 float input_axis_left_x(void);
 float input_axis_left_y(void);
-/* Menu acikken bakis tus yedegi kapatilir (onay tusuyla cakismasin) */
+/* The look-button fallback is off while the menu is open (so it does not clash with confirm) */
 void  input_set_look_keys(int enabled);
 
 float input_axis_right_x(void);
 float input_axis_right_y(void);
 
-/* Herhangi bir koldan gelen giris - menu icin */
+/* Input from any pad - for the menu */
 int  input_any_pressed(unsigned int mask);
 int  input_any_dir_pressed(void);
 

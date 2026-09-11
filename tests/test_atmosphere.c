@@ -1,4 +1,4 @@
-/* atmosphere icin host tarafi birim testleri */
+/* Host-side unit tests for atmosphere */
 #include <stdio.h>
 #include <math.h>
 #include "../source/atmosphere.h"
@@ -26,18 +26,18 @@ static void test_tum_kombinasyonlar_gecerli(void)
     Atmosphere a;
     int w, t;
 
-    printf("test: her hava/saat kombinasyonu gecerli degerler uretiyor\n");
+    printf("test: every weather/time combination produces valid values\n");
     for (w = 0; w < WEATHER_COUNT; w++) {
         for (t = 0; t < TIME_COUNT; t++) {
             atmosphere_compute(&a, (Weather)w, (TimeOfDay)t);
 
-            CHECK(fabsf(len3(a.sun_dir) - 1.0f) < 0.01f, "gunes yonu birim vektor");
-            CHECK(in01(a.horizon), "ufuk rengi gecerli aralikta");
-            CHECK(in01(a.zenith), "tepe rengi gecerli aralikta");
-            CHECK(in01(a.sun_color), "gunes rengi gecerli aralikta");
-            CHECK(a.fog_distance > 0.0f, "sis mesafesi pozitif");
-            CHECK(a.wave_scale > 0.0f, "dalga carpani pozitif");
-            CHECK(a.cloud_low < a.cloud_high, "bulut esikleri tutarli");
+            CHECK(fabsf(len3(a.sun_dir) - 1.0f) < 0.01f, "sun direction is a unit vector");
+            CHECK(in01(a.horizon), "horizon colour in range");
+            CHECK(in01(a.zenith), "zenith colour in range");
+            CHECK(in01(a.sun_color), "sun colour in range");
+            CHECK(a.fog_distance > 0.0f, "fog distance positive");
+            CHECK(a.wave_scale > 0.0f, "wave multiplier positive");
+            CHECK(a.cloud_low < a.cloud_high, "cloud thresholds consistent");
             CHECK(a.rain >= 0.0f && a.rain <= 1.0f, "yagmur 0..1");
         }
     }
@@ -48,27 +48,27 @@ static void test_gece_karanlik(void)
     Atmosphere gunduz, gece;
     float g, n;
 
-    printf("test: gece gunduzden belirgin karanlik\n");
+    printf("test: night is clearly darker than day\n");
     atmosphere_compute(&gunduz, WEATHER_SUNNY, TIME_DAY);
     atmosphere_compute(&gece, WEATHER_SUNNY, TIME_NIGHT);
 
     g = gunduz.zenith[0] + gunduz.zenith[1] + gunduz.zenith[2];
     n = gece.zenith[0] + gece.zenith[1] + gece.zenith[2];
 
-    CHECK(n < g * 0.5f, "gece gokyuzu cok daha koyu");
-    CHECK(gece.water_dark < gunduz.water_dark, "gece su daha koyu");
+    CHECK(n < g * 0.5f, "night sky much darker");
+    CHECK(gece.water_dark < gunduz.water_dark, "night water darker");
 }
 
 static void test_sis_gorusu_kisaltiyor(void)
 {
     Atmosphere sunny, foggy;
 
-    printf("test: sisli havada gorus mesafesi ciddi kisaliyor\n");
+    printf("test: fog seriously shortens visibility\n");
     atmosphere_compute(&sunny, WEATHER_SUNNY, TIME_DAY);
     atmosphere_compute(&foggy, WEATHER_FOGGY, TIME_DAY);
 
-    CHECK(foggy.fog_distance < sunny.fog_distance * 0.4f, "sis mesafesi kisaldi");
-    CHECK(foggy.wave_scale < sunny.wave_scale, "sisli havada deniz durgun");
+    CHECK(foggy.fog_distance < sunny.fog_distance * 0.4f, "fog distance shortened");
+    CHECK(foggy.wave_scale < sunny.wave_scale, "sea is calm in fog");
 }
 
 static void test_firtina_en_siddetli(void)
@@ -77,32 +77,32 @@ static void test_firtina_en_siddetli(void)
     int i;
     int en_buyuk_dalga = 0;
 
-    printf("test: firtina en buyuk dalgalari ve yagmuru uretiyor\n");
+    printf("test: storm produces the biggest waves and the rain\n");
     for (i = 0; i < WEATHER_COUNT; i++) {
         atmosphere_compute(&a[i], (Weather)i, TIME_DAY);
         if (a[i].wave_scale > a[en_buyuk_dalga].wave_scale)
             en_buyuk_dalga = i;
     }
 
-    CHECK(en_buyuk_dalga == WEATHER_STORMY, "en buyuk dalga firtinada");
-    CHECK(a[WEATHER_STORMY].rain > a[WEATHER_RAINY].rain, "firtinada yagmur daha siddetli");
-    CHECK(a[WEATHER_STORMY].lightning > 0.0f, "firtinada simsek var");
-    CHECK(a[WEATHER_SUNNY].rain == 0.0f, "gunesli havada yagmur yok");
-    CHECK(a[WEATHER_SUNNY].lightning == 0.0f, "gunesli havada simsek yok");
+    CHECK(en_buyuk_dalga == WEATHER_STORMY, "biggest waves in the storm");
+    CHECK(a[WEATHER_STORMY].rain > a[WEATHER_RAINY].rain, "heavier rain in the storm");
+    CHECK(a[WEATHER_STORMY].lightning > 0.0f, "lightning in the storm");
+    CHECK(a[WEATHER_SUNNY].rain == 0.0f, "no rain in sunny weather");
+    CHECK(a[WEATHER_SUNNY].lightning == 0.0f, "no lightning in sunny weather");
     CHECK(a[WEATHER_STORMY].cloud_bright < a[WEATHER_SUNNY].cloud_bright,
-          "firtina bulutlari daha koyu");
+          "storm clouds darker");
 }
 
 static void test_bulutlu_daha_kapali(void)
 {
     Atmosphere sunny, cloudy;
 
-    printf("test: bulutlu havada gokyuzu daha kapali\n");
+    printf("test: cloudy weather gives a more overcast sky\n");
     atmosphere_compute(&sunny, WEATHER_SUNNY, TIME_DAY);
     atmosphere_compute(&cloudy, WEATHER_CLOUDY, TIME_DAY);
 
-    /* esik dustukce daha cok bolge bulut sayilir */
-    CHECK(cloudy.cloud_low < sunny.cloud_low, "bulut esigi dustu");
+    /* the lower the threshold, the more of the sky counts as cloud */
+    CHECK(cloudy.cloud_low < sunny.cloud_low, "cloud threshold lowered");
 }
 
 int main(void)
@@ -113,6 +113,6 @@ int main(void)
     test_firtina_en_siddetli();
     test_bulutlu_daha_kapali();
 
-    printf("\n%d kontrol, %d hata\n", checks, failures);
+    printf("\n%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

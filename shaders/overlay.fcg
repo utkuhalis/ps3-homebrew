@@ -1,11 +1,11 @@
-/* 2D bindirme - fragment programi.
+/* 2D overlay - fragment program.
  *
- * params.x  sekil modu: 0 dikdortgen, 1 yumusak leke, 2 halka/daire
- * params.yz kose UV (0..1)
- * params.w  halka ic yaricapi (0 ise dolu daire)
+ * params.x  shape: 0 rectangle, 1 soft blob, 2 ring/disc
+ * params.yz corner UV (0..1)
+ * params.w  inner ring radius (0 means a filled disc)
  *
- * Kosullu dallanma yerine karisim kullaniliyor; fragment biriminde
- * dallanma pahali ve bazi durumlarda guvenilmez. */
+ * Blending is used instead of branching; branches are expensive on the
+ * fragment unit and unreliable in some cases. */
 void main
 (
 	float4 color  : TEXCOORD0,

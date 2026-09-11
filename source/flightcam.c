@@ -16,8 +16,8 @@ const char *flightcam_name(CamMode m)
     }
 }
 
-/* Kameranin ileri yonu: (cos(pitch)*sin(yaw), sin(pitch), -cos(pitch)*cos(yaw))
- * Ters cevirirsek yaw = atan2(dx, -dz), pitch = asin(dy). */
+/* Camera forward vector: (cos(pitch)*sin(yaw), sin(pitch), -cos(pitch)*cos(yaw))
+ * Inverted: yaw = atan2(dx, -dz), pitch = asin(dy). */
 void flightcam_look_at(const float eye[3], const float target[3],
                        float *yaw, float *pitch)
 {
@@ -40,10 +40,10 @@ void flightcam_look_at(const float eye[3], const float target[3],
     *pitch = asinf(dy < -1.0f ? -1.0f : (dy > 1.0f ? 1.0f : dy));
 }
 
-/* Ucak govdesine gore yerel bir noktayi dunya uzayina tasir.
- * Kamera yerlesimlerinde yatis (roll) bilerek uygulanmaz: ucak yattiginda
- * kameranin da yan yatmasi TPS goruntusunu okunmaz hale getiriyor. Yalnizca
- * yaw ve pitch uygulanir. */
+/* Moves a point local to the aircraft body into world space.
+ * Camera mounts deliberately ignore roll: when the aircraft banks, a
+ * camera that banks with it makes the chase view unreadable. Only yaw and
+ * pitch are applied. */
 static void mount_point(const Flight *f, const float local[3], float out[3])
 {
     float cy = cosf(f->yaw),   sy = sinf(f->yaw);
@@ -52,30 +52,31 @@ static void mount_point(const Flight *f, const float local[3], float out[3])
     float y = local[1] * cp - local[2] * sp;
     float z = local[1] * sp + local[2] * cp;
 
-    /* Yaw dondurmesi burun yonuyle tutarli olmali: yerel -Z ekseni dunyada
-     * (sin yaw, 0, -cos yaw) yonune gitmeli - forward_vec ile ayni. Isaret
-     * ters yazilinca kamera bazi yonelimlerde ucagin ONUNE dusuyordu. */
+    /* The yaw rotation must agree with the nose direction: local -Z has to
+     * map to (sin yaw, 0, -cos yaw) in the world - the same as forward_vec.
+     * With the sign reversed the camera ended up IN FRONT of the aircraft in
+     * some attitudes. */
     out[0] = f->pos[0] + (x * cy - z * sy);
     out[1] = f->pos[1] + y;
     out[2] = f->pos[2] + (x * sy + z * cy);
 }
 
-/* Kameranin bakacagi nokta: ucagin govde merkezi, biraz ileride.
- * Burnun onune bakmak ucus yonunu gorunur kilar. */
+/* The point the camera looks at: the aircraft's body centre, a little
+ * ahead. Looking ahead of the nose makes the flight direction visible. */
 static void aim_point(const Flight *f, float out[3])
 {
     float local[3];
 
     local[0] = 0.0f;
     local[1] = 0.6f;
-    local[2] = -3.0f;           /* govde merkezine yakin: yorungede donerken
-                                 * ucak kadrajin ortasinda kalir */
+    local[2] = -3.0f;           /* close to the body centre: when orbiting,
+                                 * the aircraft stays in the middle of the frame */
     mount_point(f, local, out);
 }
 
-/* --- yorunge (orbit) durumu ---
- * Kamera, ucagin cevresinde kuresel koordinatlarla konumlanir. */
-/* Kamera ile engel arasinda birakilan pay */
+/* --- orbit state ---
+ * The camera is placed around the aircraft in spherical coordinates. */
+/* Clearance kept between the camera and an obstacle */
 #define CAM_SKIN               3.0f
 #define CAM_GROUND_CLEARANCE   1.5f
 
@@ -84,8 +85,8 @@ static void aim_point(const Flight *f, float out[3])
 #define ORBIT_DIST_MIN    18.0f
 #define ORBIT_DIST_MAX   160.0f
 
-static float orbit_yaw = 0.0f;      /* 0 = tam arkadan */
-static float orbit_pitch = 0.22f;   /* + yukaridan bakar */
+static float orbit_yaw = 0.0f;      /* 0 = straight behind */
+static float orbit_pitch = 0.22f;   /* + looks from above */
 static float orbit_dist = 48.0f;
 
 void flightcam_orbit(float dyaw, float dpitch, float dzoom, float dt)
@@ -117,8 +118,8 @@ int flightcam_orbit_active(void)
     return (a > 0.05f);
 }
 
-/* Her mod icin ucak govdesine gore kamera yerlesimi (x sag, y yukari,
- * z geri; burun -Z yonunde). */
+/* Camera mount for each mode, relative to the aircraft body (x right,
+ * y up, z back; nose towards -Z). */
 static void mount_local(CamMode mode, float out[3])
 {
     switch (mode) {
@@ -133,7 +134,7 @@ static void mount_local(CamMode mode, float out[3])
         break;
     case CAM_CHASE:
     default:
-        /* Kuresel koordinat: yorunge acilari ve mesafe */
+        /* Spherical coordinates: orbit angles and distance */
         {
             float cp = cosf(orbit_pitch);
 
@@ -150,7 +151,7 @@ float flightcam_ground_at(const Flight *f, float wx, float wz)
     float dx = wx - f->ground_ref[0];
     float dz = wz - f->ground_ref[2];
 
-    /* Pist dikdortgeninin uzerinde zemin pist yuzeyidir; disinda deniz. */
+    /* Over the runway rectangle the ground is the runway surface; outside it is the sea. */
     if (flight_over_runway(f, dx, dz))
         return DECK_Y;
     return WATER_SAFE_ALT;
@@ -165,12 +166,12 @@ void flightcam_clamp(Camera *cam, const float plane_pos[3],
     float d2 = dx * dx + dy * dy + dz * dz;
     float rmin = plane_radius + CAM_SKIN;
 
-    /* --- ucagin govdesine girme --- */
+    /* --- entering the aircraft body --- */
     if (d2 < rmin * rmin) {
         float d = sqrtf(d2);
 
         if (d < 0.001f) {
-            /* Tam merkezde: gecerli bir yon yok, arkaya it. */
+            /* Dead centre: no valid direction, push it backwards. */
             cam->pos[0] = plane_pos[0];
             cam->pos[1] = plane_pos[1];
             cam->pos[2] = plane_pos[2] + rmin;
@@ -183,7 +184,7 @@ void flightcam_clamp(Camera *cam, const float plane_pos[3],
         }
     }
 
-    /* --- zeminin altina inme --- */
+    /* --- dropping below the ground --- */
     if (cam->pos[1] < ground_y + CAM_GROUND_CLEARANCE)
         cam->pos[1] = ground_y + CAM_GROUND_CLEARANCE;
 }
@@ -195,14 +196,14 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
     int i;
 
     if (mode == CAM_FREE)
-        return;                 /* serbest modda kamera kendi kontrolunde */
+        return;                 /* in free mode the camera is under its own control */
 
     if (mode == CAM_COCKPIT) {
         aircraft_cockpit_pos(f, eye);
         for (i = 0; i < 3; i++)
             cam->pos[i] = eye[i];
 
-        /* pilot gozunde kamera ucakla birebir ayni yone bakar */
+        /* at the pilot's eye the camera looks exactly where the aircraft points */
         cam->yaw = f->yaw;
         cam->pitch = f->pitch;
         return;
@@ -212,9 +213,9 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
     mount_point(f, local, eye);
     aim_point(f, aim);
 
-    /* Kanat kameralari govdeye sabittir (titremesin diye lerp yok).
-     * Takip ve kuyruk kameralari yumusak yaklasir; manevrada kamera geride
-     * savrulur ve hiz hissi olusur. */
+    /* The wing cameras are fixed to the body (no lerp, so they do not shake).
+     * The chase and tail cameras ease in; in a manoeuvre the camera swings
+     * behind and gives a sense of speed. */
     if (mode == CAM_LEFT_WING || mode == CAM_RIGHT_WING) {
         for (i = 0; i < 3; i++)
             cam->pos[i] = eye[i];
@@ -226,13 +227,13 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
             cam->pos[i] += (eye[i] - cam->pos[i]) * k;
     }
 
-    /* Engeller: govde ve zemin.
+    /* Obstacles: the body and the ground.
      *
-     * Zemin olarak kameranin ALTINDAKI yuzey yetmiyor: ucak pistteyken
-     * kamera pistin yanina savruldugunda oradaki zemin deniz seviyesi
-     * oluyor, kamera 9 metre asagi inip pistin ALTINA giriyor ve pist
-     * gorusu kapatiyordu. Bu yuzden ucagin altindaki zemin de hesaba
-     * katilir; kamera ikisinin YUKSEK olanindan asagi inemez. */
+     * The surface UNDER the camera is not enough as the ground: with the
+     * aircraft on the runway, a camera swung out beside the runway saw sea
+     * level there, dropped 9 metres, went UNDER the runway and lost sight of
+     * it. So the ground under the aircraft is considered too; the camera
+     * cannot go below the HIGHER of the two. */
     {
         float g_cam = flightcam_ground_at(f, cam->pos[0], cam->pos[2]);
         float g_plane = flightcam_ground_at(f, f->pos[0], f->pos[2]);
@@ -241,7 +242,7 @@ void flightcam_update(Camera *cam, CamMode mode, const Flight *f, float dt)
         flightcam_clamp(cam, f->pos, aircraft_bound_radius(), ground);
     }
 
-    /* Konum neresi olursa olsun kamera ucaga bakar: ucak her zaman
-     * ekranin ortasinda kalir. */
+    /* Wherever it is, the camera looks at the aircraft: the aircraft always
+     * stays in the middle of the screen. */
     flightcam_look_at(cam->pos, aim, &cam->yaw, &cam->pitch);
 }

@@ -2,12 +2,12 @@
 
 #include "skycolor.h"
 
-/* Gunes: sag ust arka tarafta, ufkun bir miktar uzerinde */
+/* Sun: right, up and behind, somewhat above the horizon */
 const float SUN_DIR[3] = { 0.34f, 0.30f, -0.89f };
 
-#define CLOUD_HEIGHT   900.0f   /* bulut katmaninin yuksekligi (birim) */
-#define CLOUD_SCALE    0.0016f  /* bulut deseninin buyuklugu */
-#define WIND_X         9.0f     /* ruzgar hizi (birim/saniye) */
+#define CLOUD_HEIGHT   900.0f   /* height of the cloud layer (units) */
+#define CLOUD_SCALE    0.0016f  /* size of the cloud pattern */
+#define WIND_X         9.0f     /* wind speed (units/second) */
 #define WIND_Z         3.0f
 
 static float clampf(float v, float lo, float hi)
@@ -26,11 +26,11 @@ static float smoothstepf(float e0, float e1, float x)
     return t * t * (3.0f - 2.0f * t);
 }
 
-/* Bulut deseni - shaders/sky.fcg ve shaders/water.fcg ile BIREBIR ayni.
+/* Cloud pattern - IDENTICAL to shaders/sky.fcg and shaders/water.fcg.
  *
- * Hash tabanli gurultu yerine ic ice sinusler kullaniliyor: RSX'in fragment
- * birimi dusuk hassasiyetle calistigi icin buyuk sabitli hash formulu
- * konsolda sabite donuyor ve bulutlar gorunmuyordu. */
+ * Nested sines are used instead of hash-based noise: RSX's fragment unit
+ * runs at low precision, so the large-constant hash formula collapsed to a
+ * constant on the console and the clouds disappeared. */
 static float cloud_pattern(float px, float py)
 {
     float a = sinf(px * 0.90f + sinf(py * 0.70f) * 1.6f);
@@ -50,7 +50,7 @@ float sky_clouds(const float dir[3], float time)
 
     float cover = smoothstepf(0.50f, 0.78f, cloud_pattern(px, pz));
 
-    /* Ufka dogru bulutlar incelip kaybolur (atmosfer etkisi) */
+    /* Clouds thin out and vanish towards the horizon (atmospheric effect) */
     cover *= smoothstepf(0.02f, 0.30f, dir[1]);
 
     return cover;
@@ -62,7 +62,7 @@ void sky_color(const float dir[3], float time, float out[3])
     float sun_dot, disk, glow, cloud, cl;
     int i;
 
-    /* Ufuktan zenite gradyan */
+    /* Gradient from horizon to zenith */
     float horizon[3] = { 0.72f, 0.82f, 0.92f };
     float zenith[3]  = { 0.16f, 0.38f, 0.78f };
     float grad = powf(up, 0.55f);
@@ -70,7 +70,7 @@ void sky_color(const float dir[3], float time, float out[3])
     for (i = 0; i < 3; i++)
         out[i] = mixf(horizon[i], zenith[i], grad);
 
-    /* Gunes: keskin disk + genis hale */
+    /* Sun: sharp disc + wide halo */
     sun_dot = dir[0] * SUN_DIR[0] + dir[1] * SUN_DIR[1] + dir[2] * SUN_DIR[2];
     sun_dot = clampf(sun_dot, 0.0f, 1.0f);
 
@@ -85,7 +85,7 @@ void sky_color(const float dir[3], float time, float out[3])
     out[1] = mixf(out[1], 0.98f, disk);
     out[2] = mixf(out[2], 0.90f, disk);
 
-    /* Bulutlar: gunese yakin olanlar hafif sarimsi aydinlanir */
+    /* Clouds: those near the sun are lit slightly yellow */
     cloud = sky_clouds(dir, time);
     if (cloud > 0.0f) {
         float lit = 0.82f + 0.18f * powf(sun_dot, 4.0f);

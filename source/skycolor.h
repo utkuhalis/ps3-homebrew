@@ -1,24 +1,24 @@
 #ifndef SKYCOLOR_H
 #define SKYCOLOR_H
 
-/* Gokyuzu rengi: bakis yonune gore gradyan + gunes + bulutlar.
- * Texture kullanilmaz, her sey hesaplanir.
+/* Sky colour: gradient by view direction + sun + clouds.
+ * No textures; everything is computed.
  *
- * ONEMLI: Buradaki formullerin birebir ayni'si shaders/sky.fcg ve
- * shaders/water.fcg icinde de bulunur (Cg'de include yok). Biri
- * degistiginde digerleri de guncellenmelidir; aksi halde suyun yansittigi
- * gokyuzu ile gercek gokyuzu birbirini tutmaz.
+ * IMPORTANT: identical copies of these formulas are in shaders/sky.fcg and
+ * shaders/water.fcg (Cg has no include). When one changes, the others
+ * must be updated too; otherwise the sky reflected in the water and the
+ * real sky disagree.
  *
- * Bu dosya donanim bagimsizdir: birim testlerde ve host onizlemesinde
- * dogrudan kullanilir. */
+ * This file is hardware independent: used directly by the unit tests and
+ * the host preview. */
 
-/* Gunes yonu (birim vektor) ve rengi - iki shader ile ayni tutulmali */
+/* Sun direction (unit vector) and colour - must match both shaders */
 extern const float SUN_DIR[3];
 
-/* dir: birim bakis vektoru, time: saniye. out: 0..1 araliginda RGB */
+/* dir: unit view vector, time: seconds. out: RGB in 0..1 */
 void sky_color(const float dir[3], float time, float out[3]);
 
-/* Sadece bulut yogunlugu (0..1) - test ve ayar icin ayrica acildi */
+/* Cloud density only (0..1) - exposed separately for tests and tuning */
 float sky_clouds(const float dir[3], float time);
 
 #endif

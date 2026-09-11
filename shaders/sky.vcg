@@ -1,16 +1,16 @@
-/* Gokyuzu - vertex programi.
+/* Sky - vertex program.
  *
- * Ekrani kaplayan dortgen dogrudan clip uzayinda verilir. Her kose icin
- * dunya uzayindaki bakis yonu, kamera eksenlerinden burada hesaplanir;
- * vertex ozniteligiyle tasimak yerine uniform kullanmak daha guvenilir. */
+ * The full-screen quad is given directly in clip space. The world-space
+ * view direction for each corner is computed here from the camera axes;
+ * uniforms proved more reliable than carrying it in a vertex attribute. */
 void main
 (
 	float3 vertexPosition : POSITION,
 	float3 vertexNormal   : NORMAL,
 	float2 vertexTexcoord : TEXCOORD0,
 
-	/* RSX sabit register'lari dort bilesenlidir; float3/float2 yerine float4
-	 * kullanmak degerlerin eksiksiz ulasmasini garantiler. */
+	/* RSX constant registers have four components; using float4 instead of
+	 * float3/float2 guarantees the values arrive whole. */
 	uniform float4 camFwd,
 	uniform float4 camRight,
 	uniform float4 camUp,

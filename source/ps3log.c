@@ -16,7 +16,7 @@ void ps3log(const char *fmt, ...)
 {
     va_list ap;
 
-    /* Emulatorde TTY'ye, konsolda dosyaya (ikisi de zararsiz) */
+    /* To the TTY in the emulator, to a file on the console (both harmless) */
     va_start(ap, fmt);
     vprintf(fmt, ap);
     va_end(ap);

@@ -24,9 +24,9 @@ static unsigned int be32(const unsigned char *p)
            ((unsigned int)p[2] << 8) | (unsigned int)p[3];
 }
 
-/* Kanal yeniden esleme: veri ARGB sirasinda; RSX'in bekledigi duzene
- * cevrilir. Bu deger yanlis olursa renkler yer degistirir (kirmizi-mavi
- * takasi en sik gorulen belirti). */
+/* Channel remap: the data is in ARGB order; this converts it to the order
+ * RSX expects. If it is wrong the colours swap (red-blue swap is the most
+ * common symptom). */
 static u32 argb_remap(void)
 {
     return (GCM_TEXTURE_REMAP_TYPE_REMAP << GCM_TEXTURE_REMAP_TYPE_B_SHIFT) |
@@ -73,7 +73,7 @@ int texture_init(void)
         mips = be32(p + off + 8);
         off += 12;
 
-        /* mip zincirinin toplam boyutu */
+        /* total size of the mip chain */
         bytes = 0;
         mw = w;
         mh = h;
@@ -86,8 +86,8 @@ int texture_init(void)
         if (off + bytes > size)
             return -4;
 
-        /* RSX yalnizca kendi belleğindeki veriyi ornekleyebilir; gomulu
-         * veri ana bellekte oldugu icin kopyalanmasi gerekiyor. */
+        /* RSX can only sample from its own memory; the embedded data lives in
+         * main memory, so it has to be copied. */
         dst = (u8 *)rsxMemalign(128, bytes);
         if (dst == NULL)
             return -5;
@@ -97,9 +97,9 @@ int texture_init(void)
             return -6;
 
         memset(&entries[i].tex, 0, sizeof(gcmTexture));
-        /* NRM: doku koordinatlari 0..1 araliginda normalize gelir.
-         * Bu bayrak olmadan RSX koordinatlari piksel cinsinden bekler ve
-         * bizim 0..1'lik UV'lerimiz hep ayni tek pikseli ornekler. */
+        /* NRM: texture coordinates arrive normalised to 0..1.
+         * Without this flag RSX expects them in pixels and our 0..1 UVs always
+         * sample the same single pixel. */
         entries[i].tex.format    = GCM_TEXTURE_FORMAT_A8R8G8B8
                                    | GCM_TEXTURE_FORMAT_LIN
                                    | GCM_TEXTURE_FORMAT_NRM;
@@ -114,14 +114,14 @@ int texture_init(void)
         entries[i].tex.pitch     = w * 4;
         entries[i].tex.offset    = gpu_off;
 
-        /* Verinin gercekten renk tasidigini dogrula: dokular simsiyah
-         * ciktiginda sorunun veride mi baglamada mi oldugunu ayirir. */
-        ps3log("doku %s %ux%u mip=%u ilk pikseller %08X %08X %08X",
+        /* Verify that the data actually carries colour: when textures come out
+         * black, this tells whether the problem is in the data or in the binding. */
+        ps3log("texture %s %ux%u mip=%u first pixels %08X %08X %08X",
                entries[i].name, w, h, mips,
                be32(p + off), be32(p + off + 4), be32(p + off + 8));
 
         off += bytes;
-        off = (off + 3u) & ~3u;     /* uretici parca sonunu hizaliyor */
+        off = (off + 3u) & ~3u;     /* the generator aligns the end of each part */
 
         entry_count++;
     }
@@ -149,15 +149,15 @@ void texture_bind(int unit, int index)
 
     rsxInvalidateTextureCache(ctx, GCM_INVALIDATE_TEXTURE);
 
-    /* Sampler'in hangi doku birimine dustugunu shader'dan sorabilecegimiz
-     * bir yol yok (rsxFragmentProgramGetAttribIndex librsx'te tanimsiz), bu
-     * yuzden ilk birkac birime ayni doku baglanir. Fazladan baglama ucuz;
-     * yanlis birimi tahmin etmek dokunun hic okunmamasina yol aciyordu. */
+    /* There is no way to ask the shader which texture unit its sampler
+     * lands on (rsxFragmentProgramGetAttribIndex is undefined in librsx), so
+     * the same texture is bound to the first few units. Extra binds are cheap;
+     * guessing the wrong unit meant the texture was never read. */
     for (u = 0; u < 4; u++) {
         rsxLoadTexture(ctx, (u8)u, &entries[index].tex);
 
-        /* minlod/maxlod 12.4 sabit noktali: lod << 8.
-         * En buyuk lod, mip SAYISI degil son mip'in indeksidir. */
+        /* minlod/maxlod are 12.4 fixed point: lod << 8.
+         * The largest lod is the index of the last mip, not the mip COUNT. */
         rsxTextureControl(ctx, (u8)u, GCM_TRUE, 0,
                           (u16)((entries[index].tex.mipmap - 1) << 8),
                           GCM_TEXTURE_MAX_ANISO_4);

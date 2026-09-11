@@ -1,11 +1,11 @@
-/* HUD onizlemesi: PS3 olmadan, host tarafinda.
+/* HUD preview: on the host, without a PS3.
  *
- * overlay modulunun yerine gecen bir CPU rasterlayici. GPU'nun yaptigi isi
- * taklit eder: MSAA kapali oldugu icin bir piksel yalnizca MERKEZI
- * dikdortgenin icine dusuyorsa boyanir. Boylece yarim piksel boyutundaki
- * dikdortgenlerin gercekten gorunup gorunmedigi burada olculebilir.
+ * A CPU rasteriser standing in for the overlay module. It imitates the GPU:
+ * with MSAA off, a pixel is painted only if its CENTRE falls inside the
+ * primitive. That makes it possible to check here whether half-pixel
+ * rectangles and thin glyph edges actually show up.
  *
- * Cikti: PPM (P6). build.sh preview ile calisir. */
+ * Output: PPM (P6). */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,7 +30,7 @@ static void put(int x, int y, color_t c, int alpha)
     fb[y][x][2] = (unsigned char)((b * alpha + fb[y][x][2] * (255 - alpha)) / 255);
 }
 
-/* Dondurulmus dikdortgen: piksel merkezi testi (GPU ile ayni kural) */
+/* Rotated rectangle: pixel-centre test (same rule as the GPU) */
 static void raster_rot(float cx, float cy, float w, float h, float ang,
                        color_t c, int alpha)
 {
@@ -162,7 +162,7 @@ int main(int argc, char **argv)
     FILE *fp;
     int y;
 
-    /* gokyuzu benzeri arka plan, HUD kontrasti gercekci gorunsun */
+    /* sky-like background, so the HUD contrast looks realistic */
     for (y = 0; y < OVL_H; y++) {
         int x;
         for (x = 0; x < OVL_W; x++) {
@@ -172,7 +172,7 @@ int main(int argc, char **argv)
         }
     }
 
-    /* --- font orneklemesi --- */
+    /* --- font samples --- */
     font_draw_text(40, 30, 3, "BASIC WATER", RGB(255, 255, 255));
     font_draw_text(40, 80, 2, "WEIGHT  59000 kg", RGB(240, 245, 255));
     font_draw_text(40, 110, 2, "HEADING 6 deg   ALTITUDE", RGB(240, 245, 255));
@@ -185,9 +185,9 @@ int main(int argc, char **argv)
     font_draw_text(700, 30, 4, "Takeoff clearance", RGB(255, 255, 255));
     font_draw_text(700, 90, 1, "Scale 1 label: flaps 15, gear down", RGB(240, 245, 255));
 
-    /* --- gostergeler, cesitli yatis ve burun acilariyla --- */
+    /* --- gauges, at various bank and pitch angles --- */
     gauges_draw(253.0f, 423.0f, 0.0f, 0.0f);
-    /* farkli yatis ve burun acilarinda suni ufuk: tasma kontrolu */
+    /* artificial horizon at various bank and pitch angles: spill check */
     {
         float rolls[5]   = { 0.0f, 0.5f, 1.2f, -0.9f, 2.6f };
         float pitches[5] = { 0.0f, 0.3f, -0.4f, 0.15f, 0.0f };
@@ -197,7 +197,7 @@ int main(int argc, char **argv)
             float cx = 150.0f + i * 130.0f;
             float cy = 400.0f;
 
-            /* gostergenin sinirini gorebilmek icin arka plani isaretle */
+            /* mark the background so the gauge boundary is visible */
             overlay_blend_rect((int)(cx - 60), (int)(cy - 60), 120, 120,
                                RGB(255, 0, 0), 60);
             gauges_draw_attitude(cx, cy, 52.0f, pitches[i], rolls[i]);
@@ -206,12 +206,12 @@ int main(int argc, char **argv)
 
     fp = fopen(out, "wb");
     if (fp == NULL) {
-        fprintf(stderr, "cikti acilamadi: %s\n", out);
+        fprintf(stderr, "could not open output: %s\n", out);
         return 1;
     }
     fprintf(fp, "P6\n%d %d\n255\n", OVL_W, OVL_H);
     fwrite(fb, 1, sizeof(fb), fp);
     fclose(fp);
-    printf("onizleme yazildi: %s\n", out);
+    printf("preview written: %s\n", out);
     return 0;
 }

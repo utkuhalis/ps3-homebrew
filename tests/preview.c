@@ -1,7 +1,8 @@
-/* Kamera ve projeksiyon matematigini host'ta dogrular.
- * Deniz izgarasi CPU'da tel-kafes olarak projekte edilip PPM'e yazilir; boylece
- * "kamera dogru yere bakiyor mu, ufuk nerede" sorusu RPCS3'e gitmeden gorulur.
- * Calistirma: tests/preview.sh */
+/* Checks the camera and projection maths on the host.
+ * The sea grid is projected as a wireframe on the CPU and written to a PPM,
+ * so "is the camera looking the right way, where is the horizon" can be
+ * answered without going to RPCS3.
+ * Run: tests/preview.sh */
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -14,7 +15,7 @@
 #define H 360
 
 #define GRID_SPACING  50.0f
-#define GRID_LINES    80      /* merkezden her yone kac cizgi */
+#define GRID_LINES    80      /* how many lines in each direction from the centre */
 
 static unsigned char fb[H][W][3];
 
@@ -22,7 +23,7 @@ static void clear_sky(void)
 {
     int x, y;
     for (y = 0; y < H; y++) {
-        /* ustte koyu, ufka dogru acilan gokyuzu */
+        /* sky dark at the top, lightening towards the horizon */
         float t = (float)y / H;
         unsigned char r = (unsigned char)(90 + 90 * t);
         unsigned char g = (unsigned char)(140 + 80 * t);
@@ -44,16 +45,16 @@ static void put(int x, int y, unsigned char r, unsigned char g, unsigned char b)
     fb[y][x][2] = b;
 }
 
-#define NEAR_W 0.01f    /* w bu degerin altindaysa nokta kamera duzleminde/arkasinda */
+#define NEAR_W 0.01f    /* below this w the point is on or behind the camera plane */
 
-/* Kirpilmis clip-space ucundan ekran koordinati uretir. */
+/* Screen coordinates from a clipped clip-space end point. */
 static void to_screen(const float c[4], float *sx, float *sy)
 {
     *sx = (c[0] / c[3] * 0.5f + 0.5f) * W;
     *sy = (1.0f - (c[1] / c[3] * 0.5f + 0.5f)) * H;
 }
 
-/* Ekran dikdortgenine gore parametrik kirpma (Liang-Barsky). */
+/* Parametric clipping against the screen rectangle (Liang-Barsky). */
 static int clip_test(float p, float q, float *t0, float *t1)
 {
     float r;
@@ -82,9 +83,9 @@ static void draw_line(const Mat4 *vp, const float a[3], const float b[3])
     mat4_transform(vp, ia, ca);
     mat4_transform(vp, ib, cb);
 
-    /* 1) yakin duzlem kirpmasi: kameranin arkasinda kalan kismi at */
+    /* 1) near plane clipping: drop the part behind the camera */
     if (ca[3] < NEAR_W && cb[3] < NEAR_W)
-        return;                                  /* tamamen arkada */
+        return;                                  /* entirely behind */
 
     if (ca[3] < NEAR_W || cb[3] < NEAR_W) {
         float t = (NEAR_W - ca[3]) / (cb[3] - ca[3]);
@@ -102,7 +103,7 @@ static void draw_line(const Mat4 *vp, const float a[3], const float b[3])
     to_screen(ca, &ax, &ay);
     to_screen(cb, &bx, &by);
 
-    /* 2) ekran dikdortgenine kirpma - boylece cok uzun cizgiler de dogru cizilir */
+    /* 2) clip to the screen rectangle - so very long lines are drawn correctly too */
     dx = bx - ax;
     dy = by - ay;
     if (!clip_test(-dx, ax - 0.0f, &t0, &t1)) return;
@@ -144,12 +145,12 @@ static void render(const Camera *cam, const char *path)
         float off = i * GRID_SPACING;
         float a[3], b[3];
 
-        /* z boyunca uzanan cizgi */
+        /* line along z */
         a[0] = cx + off; a[1] = WATER_LEVEL; a[2] = cz + lo;
         b[0] = cx + off; b[1] = WATER_LEVEL; b[2] = cz + hi;
         draw_line(&vp, a, b);
 
-        /* x boyunca uzanan cizgi */
+        /* line along x */
         a[0] = cx + lo; a[1] = WATER_LEVEL; a[2] = cz + off;
         b[0] = cx + hi; b[1] = WATER_LEVEL; b[2] = cz + off;
         draw_line(&vp, a, b);
@@ -172,31 +173,31 @@ int main(void)
 {
     Camera c;
 
-    /* 1) baslangic: 20 birim yukseklikte, ufka bakiyor */
+    /* 1) start: 20 units high, looking at the horizon */
     camera_init(&c);
     render(&c, "build-test/01-baslangic.ppm");
 
-    /* 2) asagi bakis */
+    /* 2) looking down */
     camera_init(&c);
     c.pos[1] = 120.0f;
     c.pitch = -0.6f;
     render(&c, "build-test/02-yukseklikten-asagi.ppm");
 
-    /* 3) saga donmus */
+    /* 3) turned right */
     camera_init(&c);
     c.pos[1] = 60.0f;
     c.yaw = 0.7f;
     c.pitch = -0.25f;
     render(&c, "build-test/03-donmus.ppm");
 
-    /* 4) suya en yakin konum (collider siniri) */
+    /* 4) closest position to the water (collider limit) */
     camera_init(&c);
     {
         int i;
         for (i = 0; i < 600; i++)
             camera_update(&c, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f / 60.0f);
     }
-    printf("  collider sonrasi yukseklik: %.3f (beklenen %.3f)\n",
+    printf("  height after collider: %.3f (expected %.3f)\n",
            c.pos[1], WATER_LEVEL + MIN_ALTITUDE);
     render(&c, "build-test/04-su-seviyesi.ppm");
 

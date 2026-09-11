@@ -1,4 +1,4 @@
-/* gamemenu_draw'in cagirdigi cizim fonksiyonlari - testlerde etkisiz */
+/* Drawing functions called by gamemenu_draw - no-ops in the tests */
 #include "../source/overlay.h"
 
 void overlay_begin(void) { }

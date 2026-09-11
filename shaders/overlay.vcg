@@ -1,8 +1,8 @@
-/* 2D bindirme - vertex programi.
+/* 2D overlay - vertex program.
  *
- * Konumlar clip uzayinda gelir. Renk NORMAL ozniteliginde, saydamlik ve
- * sekil bilgisi TEXCOORD0'da tasinir:
- *   x = saydamlik, y = sekil (0 dikdortgen, 1 yumusak daire), zw = kose UV */
+ * Positions arrive in clip space. Colour travels in the NORMAL attribute,
+ * opacity and shape in TEXCOORD0:
+ *   x = opacity, y = shape (0 rectangle, 1 soft disc), zw = corner UV */
 void main
 (
 	float3 vertexPosition : POSITION,

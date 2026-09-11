@@ -5,8 +5,8 @@
 #include "runway.h"
 #include "flight.h"
 
-/* --- Dunya 1: acik deniz ---
- * Gokyuzu, su ve iki pist. Projenin baslangicindan beri var olan ortam. */
+/* --- World 1: open sea ---
+ * Sky, water and two runways. The environment the project started with. */
 
 static int sea_init(void)
 {

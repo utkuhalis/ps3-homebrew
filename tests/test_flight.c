@@ -1,4 +1,4 @@
-/* Ucus modeli icin host tarafi birim testleri (PS3 gerekmez). */
+/* Host-side unit tests for the flight model (no PS3 needed). */
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -13,22 +13,22 @@ static void test_tasima_hizla_artiyor(void)
 {
     float l1, l2;
 
-    printf("test: tasima hizin karesiyle artiyor\n");
+    printf("test: lift grows with the square of speed\n");
     l1 = flight_lift_force(50.0f, 0.08f, 0.0f, 0.0f);
     l2 = flight_lift_force(100.0f, 0.08f, 0.0f, 0.0f);
 
-    CHECK(l2 > l1 * 3.5f && l2 < l1 * 4.5f, "hiz iki kat -> tasima ~dort kat");
+    CHECK(l2 > l1 * 3.5f && l2 < l1 * 4.5f, "double speed -> ~four times the lift");
 }
 
 static void test_stall(void)
 {
     float normal, asiri;
 
-    printf("test: kritik acidan sonra tasima cokuyor (stall)\n");
+    printf("test: lift collapses past the critical angle (stall)\n");
     normal = flight_lift_force(80.0f, STALL_ANGLE_RAD - 0.02f, 0.0f, 0.0f);
     asiri  = flight_lift_force(80.0f, STALL_ANGLE_RAD + 0.25f, 0.0f, 0.0f);
 
-    CHECK(asiri < normal * 0.6f, "stall sonrasi tasima belirgin dustu");
+    CHECK(asiri < normal * 0.6f, "lift dropped clearly after the stall");
 }
 
 static void test_flap_kritik_aciyi_artiriyor(void)
@@ -36,11 +36,11 @@ static void test_flap_kritik_aciyi_artiriyor(void)
     float aoa = STALL_ANGLE_RAD + 0.03f;
     float flapsiz, flapli;
 
-    printf("test: flap acikken kritik aci yukseliyor\n");
+    printf("test: flaps raise the critical angle\n");
     flapsiz = flight_lift_force(70.0f, aoa, 0.0f, 0.0f);
     flapli  = flight_lift_force(70.0f, aoa, 1.0f, 0.0f);
 
-    CHECK(flapli > flapsiz, "ayni acida flap daha cok tasima veriyor");
+    CHECK(flapli > flapsiz, "flaps give more lift at the same angle");
 }
 
 static void test_flap_dusuk_hizda_ucmayi_sagliyor(void)
@@ -49,7 +49,7 @@ static void test_flap_dusuk_hizda_ucmayi_sagliyor(void)
     float hiz;
     float flapsiz_min = 0.0f, flapli_min = 0.0f;
 
-    printf("test: flap acikken daha dusuk hizda havada kalinabiliyor\n");
+    printf("test: with flaps the aircraft stays airborne at a lower speed\n");
 
     for (hiz = 20.0f; hiz < 200.0f; hiz += 0.5f) {
         if (flapsiz_min == 0.0f &&
@@ -60,22 +60,22 @@ static void test_flap_dusuk_hizda_ucmayi_sagliyor(void)
             flapli_min = hiz;
     }
 
-    CHECK(flapsiz_min > 0.0f && flapli_min > 0.0f, "iki durumda da ucabiliyor");
-    CHECK(flapli_min < flapsiz_min, "flap asgari ucus hizini dusurdu");
+    CHECK(flapsiz_min > 0.0f && flapli_min > 0.0f, "flies in both cases");
+    CHECK(flapli_min < flapsiz_min, "flaps lowered the minimum flying speed");
 }
 
 static void test_spoiler_frenliyor(void)
 {
     float d0, d1, l0, l1;
 
-    printf("test: spoiler tasimayi kiriyor ve suruklemeyi artiriyor\n");
+    printf("test: spoilers cut lift and add drag\n");
     l0 = flight_lift_force(90.0f, 0.10f, 0.0f, 0.0f);
     l1 = flight_lift_force(90.0f, 0.10f, 0.0f, 1.0f);
     d0 = flight_drag_force(90.0f, 0.10f, 0.0f, 0.0f);
     d1 = flight_drag_force(90.0f, 0.10f, 0.0f, 1.0f);
 
-    CHECK(l1 < l0 * 0.6f, "tasima belirgin dustu");
-    CHECK(d1 > d0 * 1.5f, "surukleme belirgin artti");
+    CHECK(l1 < l0 * 0.6f, "lift dropped clearly");
+    CHECK(d1 > d0 * 1.5f, "drag rose clearly");
 }
 
 static void test_yakit_ve_agirlik(void)
@@ -85,7 +85,7 @@ static void test_yakit_ve_agirlik(void)
     float ilk_agirlik;
     int i;
 
-    printf("test: yakit tukeniyor, agirlik azaliyor, sonra itki kesiliyor\n");
+    printf("test: fuel burns, weight drops, then thrust cuts out\n");
     flight_init(&f, start, 0.0f);
     ilk_agirlik = f.mass_kg;
     f.throttle = 1.0f;
@@ -93,15 +93,15 @@ static void test_yakit_ve_agirlik(void)
     for (i = 0; i < 12000; i++)
         flight_update(&f, 1.0f / 60.0f);
 
-    CHECK(f.fuel_kg < FUEL_FULL_KG, "yakit azaldi");
-    CHECK(f.mass_kg < ilk_agirlik, "agirlik azaldi");
+    CHECK(f.fuel_kg < FUEL_FULL_KG, "fuel went down");
+    CHECK(f.mass_kg < ilk_agirlik, "weight went down");
 
-    /* yakiti tamamen bitir */
+    /* burn all the fuel */
     for (i = 0; i < 900000 && f.fuel_kg > 0.0f; i++)
         flight_update(&f, 1.0f / 60.0f);
 
-    CHECK(f.fuel_kg == 0.0f, "yakit bitti");
-    CHECK(fabsf(f.mass_kg - EMPTY_MASS_KG) < 0.01f, "agirlik bos agirliga esit");
+    CHECK(f.fuel_kg == 0.0f, "out of fuel");
+    CHECK(fabsf(f.mass_kg - EMPTY_MASS_KG) < 0.01f, "weight equals empty weight");
 }
 
 static void test_denizin_altina_inilemiyor(void)
@@ -110,10 +110,10 @@ static void test_denizin_altina_inilemiyor(void)
     float start[3] = { 0.0f, 300.0f, 0.0f };
     int i, batti = 0;
 
-    printf("test: hicbir girdi ucagi denizin altina indiremiyor\n");
+    printf("test: no input can put the aircraft below the sea\n");
     flight_init(&f, start, 0.0f);
     f.throttle = 1.0f;
-    f.in_pitch = -1.0f;             /* burun asagi, tam gaz */
+    f.in_pitch = -1.0f;             /* nose down, full throttle */
 
     for (i = 0; i < 20000; i++) {
         flight_update(&f, 1.0f / 60.0f);
@@ -121,7 +121,7 @@ static void test_denizin_altina_inilemiyor(void)
             batti = 1;
     }
 
-    CHECK(!batti, "hicbir karede deniz seviyesinin altina inmedi");
+    CHECK(!batti, "never went below sea level in any frame");
 }
 
 static void test_gaz_hizlandiriyor(void)
@@ -130,7 +130,7 @@ static void test_gaz_hizlandiriyor(void)
     float start[3] = { 0.0f, 800.0f, 0.0f };
     int i;
 
-    printf("test: gaz acikken ucak hizlaniyor\n");
+    printf("test: the aircraft accelerates with throttle\n");
     flight_init(&a, start, 0.0f);
     flight_init(&b, start, 0.0f);
     a.throttle = 0.0f;
@@ -141,7 +141,7 @@ static void test_gaz_hizlandiriyor(void)
         flight_update(&b, 1.0f / 60.0f);
     }
 
-    CHECK(b.airspeed > a.airspeed, "tam gaz daha yuksek hiz veriyor");
+    CHECK(b.airspeed > a.airspeed, "full throttle gives a higher speed");
 }
 
 static void test_yonelim_sinirli(void)
@@ -150,7 +150,7 @@ static void test_yonelim_sinirli(void)
     float start[3] = { 0.0f, 600.0f, 0.0f };
     int i;
 
-    printf("test: burun acisi sinirli, yaw ve roll sarmali\n");
+    printf("test: pitch is limited, yaw and roll wrap\n");
     flight_init(&f, start, 0.0f);
     f.in_pitch = 1.0f;
     f.in_roll = 1.0f;
@@ -158,9 +158,9 @@ static void test_yonelim_sinirli(void)
     for (i = 0; i < 3000; i++)
         flight_update(&f, 1.0f / 60.0f);
 
-    CHECK(f.pitch <= 1.31f && f.pitch >= -1.31f, "burun acisi sinirli");
-    CHECK(f.roll >= -3.15f && f.roll <= 3.15f, "yatis acisi sarmali");
-    CHECK(f.yaw >= -3.15f && f.yaw <= 3.15f, "sapma acisi sarmali");
+    CHECK(f.pitch <= 1.31f && f.pitch >= -1.31f, "pitch angle limited");
+    CHECK(f.roll >= -3.15f && f.roll <= 3.15f, "roll angle wraps");
+    CHECK(f.yaw >= -3.15f && f.yaw <= 3.15f, "yaw angle wraps");
 }
 
 static void test_pistte_basliyor(void)
@@ -168,14 +168,14 @@ static void test_pistte_basliyor(void)
     Flight f;
     float rw[2] = { -1500.0f, 1200.0f };
 
-    printf("test: ucak pistte, duruyor ve motor rolantide basliyor\n");
+    printf("test: starts on the runway, stationary, engine at idle\n");
     flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
 
     CHECK(f.on_ground, "yerde");
     CHECK(f.airspeed < 0.1f, "duruyor");
-    CHECK(f.throttle < 0.01f, "motor rolantide");
-    CHECK(f.gear_down, "inis takimi acik");
-    CHECK(f.pos[1] > DECK_Y, "pist yuzeyinin uzerinde");
+    CHECK(f.throttle < 0.01f, "engine at idle");
+    CHECK(f.gear_down, "landing gear down");
+    CHECK(f.pos[1] > DECK_Y, "over the runway surface");
 }
 
 static void test_gaz_vermeden_kalkamaz(void)
@@ -184,14 +184,14 @@ static void test_gaz_vermeden_kalkamaz(void)
     float rw[2] = { 0.0f, 0.0f };
     int i;
 
-    printf("test: gaz verilmeden ucak pistte kaliyor\n");
+    printf("test: without throttle the aircraft stays on the runway\n");
     flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
-    f.in_pitch = 1.0f;              /* burnu kaldirmayi dene */
+    f.in_pitch = 1.0f;              /* try to lift the nose */
 
     for (i = 0; i < 600; i++)
         flight_update(&f, 1.0f / 60.0f);
 
-    CHECK(f.on_ground, "hala yerde");
+    CHECK(f.on_ground, "still on the ground");
     CHECK(!f.airborne, "havalanmadi");
 }
 
@@ -202,44 +202,44 @@ static void test_kalkis_yapilabiliyor(void)
     int i;
     float max_speed = 0.0f;
 
-    printf("test: tam gazla hizlanip burun kaldirilinca kalkis oluyor\n");
+    printf("test: accelerating at full throttle and rotating makes a takeoff\n");
     flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
     f.throttle = 1.0f;
 
-    /* Once hizlan (burun yerde), sonra burnu kaldir.
-     * 30 saniye: gercekci itkiyle kalkis kosusu ~14 saniye suruyor,
-     * tirmanis icin de zaman gerekiyor. Test onceden 15 saniyeydi ve
-     * itki yariya indirildiginde yetmez oldu. */
+    /* Accelerate first (nose on the ground), then rotate.
+     * 30 seconds: with realistic thrust the takeoff run takes ~14 seconds and
+     * the climb needs time too. The test used to be 15 seconds and became too
+     * short when the thrust was halved. */
     for (i = 0; i < 1800; i++) {
         flight_update(&f, 1.0f / 60.0f);
         if (f.airspeed > max_speed)
             max_speed = f.airspeed;
-        /* rotate hizina ulasinca burnu kaldir */
+        /* lift the nose on reaching rotate speed */
         if (f.airspeed > ROTATE_SPEED_MS)
             f.in_pitch = 0.55f;
     }
 
-    CHECK(max_speed > ROTATE_SPEED_MS, "kalkis hizina ulasildi");
-    CHECK(f.airborne, "ucak havalandi");
-    CHECK(f.pos[1] > DECK_Y + 10.0f, "yukselmeye devam etti");
+    CHECK(max_speed > ROTATE_SPEED_MS, "takeoff speed reached");
+    CHECK(f.airborne, "aircraft got airborne");
+    CHECK(f.pos[1] > DECK_Y + 10.0f, "kept climbing");
 }
 
 static void test_gear_surukleme(void)
 {
     float acik, kapali;
 
-    printf("test: acik inis takimi suruklemeyi artiriyor\n");
+    printf("test: extended landing gear adds drag\n");
     acik   = flight_drag_force_full(90.0f, 0.08f, 0.0f, 0.0f, 1);
     kapali = flight_drag_force_full(90.0f, 0.08f, 0.0f, 0.0f, 0);
 
-    CHECK(acik > kapali, "takim acikken surukleme daha yuksek");
+    CHECK(acik > kapali, "drag higher with the gear down");
 }
 
-/* Duz ucusta ve donuste STALL uyarisi CIKMAMALI.
+/* NO STALL warning in level flight or in a turn.
  *
- * Hucum acisi once hiz vektoru ile burun arasindaki toplam aci olarak
- * hesaplaniyordu; yan kayma da bu aciya karistigi icin her donuste sahte
- * stall uyarisi veriliyordu. */
+ * The angle of attack used to be computed as the total angle between the
+ * velocity and the nose; sideslip got mixed into it, so every turn raised
+ * a false stall warning. */
 static void test_donuste_sahte_stall_yok(void)
 {
     Flight f;
@@ -248,19 +248,19 @@ static void test_donuste_sahte_stall_yok(void)
     int stall_frames = 0;
     float max_aoa = 0.0f;
 
-    printf("test: duz ucus ve donuste sahte stall cikmiyor\n");
+    printf("test: no false stall in level flight or turns\n");
 
     pos[0] = 0.0f; pos[1] = 3000.0f; pos[2] = 0.0f;
     flight_init(&f, pos, 0.0f);
     f.throttle = 0.80f;
 
-    /* once duz ucusta dengelensin */
+    /* settle in level flight first */
     for (i = 0; i < 60 * 10; i++)
         flight_update(&f, 1.0f / 60.0f);
 
-    /* Sonra 30 saniye koordineli donus: yatis 26 derecede TUTULUR.
-     * Sabit aileron girdisi vermek ucagi takla attirir - gercek ucakta da
-     * oyle olur, o yuzden pilot gibi yatisi sabit tutuyoruz. */
+    /* Then 30 seconds of coordinated turn: the bank is HELD at 26 degrees.
+     * A constant aileron input rolls the aircraft over - a real aircraft does
+     * that too, so like a pilot we hold the bank steady. */
     for (i = 0; i < 60 * 30; i++) {
         float bank_target = 0.45f;
 
@@ -268,9 +268,9 @@ static void test_donuste_sahte_stall_yok(void)
         if (f.in_roll >  1.0f) f.in_roll =  1.0f;
         if (f.in_roll < -1.0f) f.in_roll = -1.0f;
 
-        /* Irtifa tutulur. Sabit burun-yukari komutu vermek ucagi surekli
-         * tirmandirip hiz kaybettiriyor ve sonunda dikleştiriyordu - gercek
-         * pilot da irtifayi tutar, komutu sabit birakmaz. */
+        /* Altitude is held. A constant nose-up input kept the aircraft climbing,
+         * bleeding speed until it went steep - a real pilot holds altitude too
+         * rather than leaving the input fixed. */
         {
             float alt_err = 3000.0f - f.pos[1];
             float vs = f.vel[1];
@@ -287,14 +287,14 @@ static void test_donuste_sahte_stall_yok(void)
             max_aoa = f.aoa;
     }
 
-    printf("       donusteki en yuksek hucum acisi %.3f rad, stall %d kare\n",
+    printf("       highest angle of attack in the turn %.3f rad, stall %d frames\n",
            max_aoa, stall_frames);
-    CHECK(stall_frames == 0, "koordineli donuste stall uyarisi cikmiyor");
-    CHECK(f.airspeed > 120.0f, "donuste ucak hizini koruyor");
-    CHECK(f.pos[1] > 2000.0f, "donuste ucak dusmuyor");
+    CHECK(stall_frames == 0, "no stall warning in a coordinated turn");
+    CHECK(f.airspeed > 120.0f, "aircraft holds its speed in the turn");
+    CHECK(f.pos[1] > 2000.0f, "aircraft does not descend in the turn");
 }
 
-/* Gercek stall hala calismali: burun asiri kaldirilirsa uyari cikmali */
+/* A real stall must still work: pulling the nose too far must warn */
 static void test_gercek_stall_calisiyor(void)
 {
     Flight f;
@@ -302,76 +302,76 @@ static void test_gercek_stall_calisiyor(void)
     int i;
     int stalled_once = 0;
 
-    printf("test: burun asiri kaldirilinca gercek stall oluyor\n");
+    printf("test: pulling the nose too far gives a real stall\n");
 
     pos[0] = 0.0f; pos[1] = 4000.0f; pos[2] = 0.0f;
     flight_init(&f, pos, 0.0f);
-    f.throttle = 0.0f;              /* gaz kesik: hiz duser */
+    f.throttle = 0.0f;              /* throttle closed: speed drops */
 
     for (i = 0; i < 60 * 40; i++) {
-        f.in_pitch = 1.0f;          /* burnu sonuna kadar cek */
+        f.in_pitch = 1.0f;          /* pull the nose all the way back */
         flight_update(&f, 1.0f / 60.0f);
         if (f.stalled)
             stalled_once = 1;
     }
 
-    CHECK(stalled_once, "asiri hucum acisinda stall algilaniyor");
+    CHECK(stalled_once, "stall detected at excessive angle of attack");
 }
 
-/* Pist collideri DIKDORTGEN olmali: pist 1100x96 birim, daire kullanmak
- * ucagin pistin yanindaki denize asfalta iner gibi konmasina yol aciyordu. */
+/* The runway collider must be a RECTANGLE: the runway is 1100x96 units, and
+ * a circle let the aircraft touch down on the sea beside it as if on asphalt. */
 static void test_pist_dikdortgen_collider(void)
 {
     Flight f;
     float rw[2] = { 0.0f, 0.0f };
 
-    printf("test: pist collideri dikdortgen\n");
+    printf("test: runway collider is a rectangle\n");
 
-    /* pist yonu 0: burun -Z, yani pist Z ekseninde uzanir */
+    /* runway heading 0: nose at -Z, so the runway runs along the Z axis */
     flight_init_on_runway(&f, rw, 0.0f, 0.0f);
 
-    CHECK(flight_over_runway(&f, 0.0f, 0.0f), "merkez pist uzerinde");
-    CHECK(flight_over_runway(&f, 0.0f, -1200.0f), "pist basi uzerinde");
-    CHECK(flight_over_runway(&f, 0.0f, 1200.0f), "pist sonu uzerinde");
-    CHECK(flight_over_runway(&f, 25.0f, 0.0f), "pist genisligi icinde");
+    CHECK(flight_over_runway(&f, 0.0f, 0.0f), "centre is on the runway");
+    CHECK(flight_over_runway(&f, 0.0f, -1200.0f), "runway start is on the runway");
+    CHECK(flight_over_runway(&f, 0.0f, 1200.0f), "runway end is on the runway");
+    CHECK(flight_over_runway(&f, 25.0f, 0.0f), "within the runway width");
 
     CHECK(!flight_over_runway(&f, 200.0f, 0.0f),
-          "pistin 200 birim yani DISARIDA");
+          "200 units beside the runway is OUTSIDE");
     CHECK(!flight_over_runway(&f, 0.0f, 1500.0f),
-          "pistin 1500 birim otesi DISARIDA");
+          "1500 units past the runway is OUTSIDE");
     CHECK(!flight_over_runway(&f, 40.0f, 0.0f),
-          "genislik sinirinin disi DISARIDA");
+          "beyond the width limit is OUTSIDE");
 
-    /* dondurulmus pist: yon 90 derece -> pist X ekseninde uzanir */
+    /* rotated runway: heading 90 degrees -> the runway runs along the X axis */
     flight_init_on_runway(&f, rw, 1.5708f, 0.0f);
     CHECK(flight_over_runway(&f, 1200.0f, 0.0f),
-          "dondurulmus pistte uzun eksen dogru");
+          "long axis correct on a rotated runway");
     CHECK(!flight_over_runway(&f, 0.0f, 200.0f),
-          "dondurulmus pistte enine sinir dogru");
+          "width limit correct on a rotated runway");
 }
 
-/* Pistin yanindaki denize inen ucak, asfaltta gibi davranmamali */
+/* An aircraft coming down on the sea beside the runway must not behave as if on asphalt */
 static void test_pist_yaninda_su(void)
 {
     Flight f;
     float rw[2] = { 0.0f, 0.0f };
     int i;
 
-    printf("test: pistin yanina inince su gibi davraniyor\n");
+    printf("test: coming down beside the runway behaves like water\n");
 
     flight_init_on_runway(&f, rw, 0.0f, 0.0f);
-    f.pos[0] = 300.0f;              /* pistin 300 birim yani: deniz */
+    f.pos[0] = 300.0f;              /* 300 units beside the runway: sea */
     f.pos[1] = DECK_Y + 20.0f;
     f.vel[1] = -8.0f;
 
     for (i = 0; i < 600; i++)
         flight_update(&f, 1.0f / 60.0f);
 
-    CHECK(f.pos[1] < DECK_Y, "pist yaninda deniz seviyesine iniyor");
+    CHECK(f.pos[1] < DECK_Y, "beside the runway it goes down to sea level");
 }
 
-/* Kumanda yuzeyleri hedefe ANINDA atlamamali: kol kademeye alinir,
- * yuzeyler oraya motor hiziyla ilerler. */
+/* Control surfaces must not jump to the target INSTANTLY: the lever is
+ * put in a detent and the surfaces follow at motor speed. */
 static void test_yuzey_animasyonu(void)
 {
     Flight f;
@@ -379,47 +379,47 @@ static void test_yuzey_animasyonu(void)
     int i;
     float onceki;
 
-    printf("test: flap ve hava freni hedefe yavasca ilerliyor\n");
+    printf("test: flaps and speed brake move to the target gradually\n");
 
     flight_init_on_runway(&f, rw, 0.0f, 1150.0f);
 
-    /* flap kolunu tam acik kademeye al */
+    /* put the flap lever in the fully extended detent */
     f.flap = 0.0f;
     f.flap_target = 1.0f;
     flight_update(&f, 1.0f / 60.0f);
-    CHECK(f.flap > 0.0f, "flap harekete basladi");
-    CHECK(f.flap < 0.05f, "flap tek karede hedefe atlamiyor");
+    CHECK(f.flap > 0.0f, "flaps started moving");
+    CHECK(f.flap < 0.05f, "flaps do not jump to the target in one frame");
 
-    /* birkac saniyede ilerlemeli ama hemen bitmemeli */
+    /* a few seconds should get part of the way, but not finish */
     for (i = 0; i < 60 * 3; i++)
         flight_update(&f, 1.0f / 60.0f);
     CHECK(f.flap > 0.15f && f.flap < 0.95f,
-          "flap birkac saniyede yolun bir kisminda");
+          "flaps part of the way after a few seconds");
 
-    /* yeterli sure sonra hedefe oturmali ve orada KALMALI */
+    /* after enough time they must settle on the target and STAY there */
     for (i = 0; i < 60 * 20; i++)
         flight_update(&f, 1.0f / 60.0f);
-    CHECK(f.flap > 0.99f, "flap sonunda hedefe ulasiyor");
+    CHECK(f.flap > 0.99f, "flaps eventually reach the target");
     onceki = f.flap;
     for (i = 0; i < 60; i++)
         flight_update(&f, 1.0f / 60.0f);
-    CHECK(f.flap == onceki, "hedefe varinca duruyor, salinmiyor");
+    CHECK(f.flap == onceki, "stops at the target, no oscillation");
 
-    /* hava freni daha hizli ama yine de anlik degil */
+    /* the speed brake is faster, but still not instant */
     f.spoiler = 0.0f;
     f.spoiler_target = 1.0f;
     flight_update(&f, 1.0f / 60.0f);
     CHECK(f.spoiler > 0.0f && f.spoiler < 0.2f,
-          "hava freni de kademeli aciliyor");
+          "speed brake also extends gradually");
 
     for (i = 0; i < 60 * 4; i++)
         flight_update(&f, 1.0f / 60.0f);
-    CHECK(f.spoiler > 0.99f, "hava freni birkac saniyede tam aciliyor");
+    CHECK(f.spoiler > 0.99f, "speed brake fully out within a few seconds");
 
-    /* geri kapanma da kademeli */
+    /* retracting is gradual as well */
     f.spoiler_target = 0.0f;
     flight_update(&f, 1.0f / 60.0f);
-    CHECK(f.spoiler > 0.8f, "kapanma da anlik degil");
+    CHECK(f.spoiler > 0.8f, "retracting is not instant either");
 }
 
 int main(void)
@@ -443,6 +443,6 @@ int main(void)
     test_gaz_hizlandiriyor();
     test_yonelim_sinirli();
 
-    printf("\n%d kontrol, %d hata\n", checks, failures);
+    printf("\n%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

@@ -1,8 +1,8 @@
-/* Ucak govdesi - fragment programi.
+/* Aircraft body - fragment program.
  *
- * Bilerek solid.fcg kadar sade: isik vertex tarafinda cozuldu, burada
- * yalnizca mesafe sisi kalir. Bu shader ucgen sayisi yuksek bir govdede
- * Gouraud interpolasyonuyla yumusak bir sonuc verir. */
+ * Deliberately as plain as solid.fcg: lighting is solved in the vertex
+ * program and only distance fog is left here. On a body with this many
+ * triangles, Gouraud interpolation gives a smooth result. */
 void main
 (
 	float4 color    : TEXCOORD0,

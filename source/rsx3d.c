@@ -36,9 +36,9 @@ static u32 scr_w = 0, scr_h = 0;
 
 #define GCM_LABEL_INDEX 255
 
-/* Referans rsxutil'deki waitRSXIdle karsiligi: RSX'in bekleyen tum isleri
- * bitirmesini bekler. Video modu degistirilmeden once cagrilmasi gerekiyor;
- * bu adim bizim kodumuzda eksikti. */
+/* Counterpart of waitRSXIdle in the reference rsxutil: waits for RSX to
+ * finish all pending work. It has to be called before changing the video
+ * mode; our code was missing this step. */
 static void wait_rsx_idle(void)
 {
     u32 label_val = 1;
@@ -80,7 +80,7 @@ static int make_buffer(Buffer *b, u32 width, u32 height, int id)
     return 0;
 }
 
-/* Renk + derinlik hedefini bagla. Her karede cagrilir (cift tamponlama). */
+/* Bind the colour + depth target. Called every frame (double buffering). */
 static void set_render_target(const Buffer *b)
 {
     gcmSurface sf;
@@ -143,26 +143,27 @@ static void set_draw_env(void)
     rsxSetDepthWriteEnable(context, 1);
     rsxSetShadeModel(context, GCM_SHADE_MODEL_SMOOTH);
 
-    /* Deniz duzlemi tek yuzlu degil - iki taraftan da gorunsun */
-    /* Arka yuz eleme varsayilan olarak kapali: su ve gokyuzu tek yuzlu
-     * yuzeyler. Kati gecmeler (ucak, pist) bunu kendileri acar. */
+    /* The sea plane is not one-sided - visible from both sides */
+    /* Backface culling is off by default: water and sky are one-sided
+     * surfaces. Solid passes (aircraft, runway) turn it on themselves. */
     rsxSetCullFaceEnable(context, GCM_FALSE);
 
-    /* On yuz yonu OLCULDU: kameraya donuk ucgenler ekran uzayinda saat
-     * yonunun tersinde cikiyor (31481 ucgende istisnasiz). Ilk yazimda
-     * viewport'un Y cevirmesinden yola cikip CW demistim - yanlisti ve
-     * sonuc olarak on yuzler atilip ucagin ICI cizildi. */
+    /* The front face winding was MEASURED: triangles facing the camera come
+     * out counter-clockwise in screen space (31481 triangles, no exceptions).
+     * The first version reasoned from the viewport's Y flip and said CW - that
+     * was wrong, and as a result the front faces were culled and the INSIDE
+     * of the aircraft was drawn. */
     rsxSetFrontFace(context, GCM_FRONTFACE_CCW);
 
-    /* Derinlik kirpma kontrolu ve viewport kirpma dikdortgenleri.
-     * Bunlar ayarlanmazsa RSX geometriyi tamamen kirpabilir. */
+    /* Depth clip control and viewport scissor rectangles.
+     * If these are not set, RSX may clip the geometry away entirely. */
     rsxSetZMinMaxControl(context, GCM_FALSE, GCM_TRUE, GCM_FALSE);
 
     for (i = 0; i < 8; i++)
         rsxSetViewportClip(context, i, scr_w, scr_h);
 
-    /* Kullanici kirpma duzlemleri kullanilmiyor; acikca kapatilmali,
-     * aksi halde tanimsiz duzlemler tum sahneyi kirpar. */
+    /* User clip planes are not used; they must be disabled explicitly,
+     * otherwise undefined planes clip the whole scene. */
     rsxSetUserClipPlaneControl(context,
                                GCM_USER_CLIP_PLANE_DISABLE,
                                GCM_USER_CLIP_PLANE_DISABLE,
@@ -265,9 +266,9 @@ float rsx3d_aspect(void)
     return (float)scr_w / (float)scr_h;
 }
 
-/* Kati geometri icin arka yuz elemesi. 60 bin ucgenlik ucak modelinde
- * ucgenlerin %49'u kameradan uzaga bakiyor; bunlari rasterlemeye hic
- * sokmamak neredeyse yarim kare kazandirir. */
+/* Backface culling for solid geometry. On the 60k-triangle aircraft model
+ * 49% of the triangles face away from the camera; keeping them out of
+ * rasterisation saves nearly half the work. */
 void rsx3d_set_culling(int enable)
 {
     if (enable) {
@@ -283,17 +284,17 @@ gcmContextData *rsx3d_context(void)
     return context;
 }
 
-/* GPU sahneyi bitirene kadar bekler; ardindan arka tampona CPU ile yazmak
- * guvenlidir. Beklemeden yazilirsa RSX hala cizerken uzerine yazilir ve
- * HUD titrer. */
-/* Ekran goruntusu: o anki on tamponu PPM olarak diske yazar.
+/* Waits until the GPU has finished the scene; after that writing to the
+ * back buffer from the CPU is safe. Written without waiting, RSX is still
+ * drawing over it and the HUD flickers. */
+/* Screenshot: writes the current front buffer to disk as a PPM.
  *
- * Gorsel hatalari (siyah doku, ters yuz, kayik UV) emulatore bakmadan
- * teshis edebilmek icin. RSX'in kareyi bitirmesi beklenir, aksi halde
- * yarim cizilmis tampon okunur. */
+ * To diagnose visual bugs (black textures, flipped faces, shifted UVs)
+ * without looking at the emulator. It waits for RSX to finish the frame,
+ * otherwise a half-drawn buffer is read. */
 int rsx3d_capture(const char *path)
 {
-    const Buffer *b = &buffers[cur_buf ^ 1];   /* en son gosterilen tampon */
+    const Buffer *b = &buffers[cur_buf ^ 1];   /* the most recently displayed buffer */
     FILE *f;
     u32 x, y;
 
@@ -302,12 +303,12 @@ int rsx3d_capture(const char *path)
 
     wait_rsx_idle();
 
-    /* Tamponun gercekten dolu olup olmadigini olc: ekran goruntusu simsiyah
-     * ciktiginda yanlis tampon mu okundugunu ayirir. */
+    /* Measure whether the buffer actually holds anything: when a screenshot
+     * comes out black, this tells a wrong buffer from an empty one. */
     {
         u32 mid = (b->height / 2) * b->width + (b->width / 2);
 
-        ps3log("capture buf=%d %ux%u px[0]=%08X px[orta]=%08X diger=%08X",
+        ps3log("capture buf=%d %ux%u px[0]=%08X px[mid]=%08X other=%08X",
                cur_buf ^ 1, b->width, b->height,
                b->ptr[0], b->ptr[mid], buffers[cur_buf].ptr[mid]);
     }

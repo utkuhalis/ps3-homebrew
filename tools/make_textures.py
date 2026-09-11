@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
-"""Doku goruntulerini RSX'in okuyabilecegi ikili bicime cevirir.
+"""Converts texture images into a binary format RSX can read.
 
-Docker'daki ps3-assets imajinda calisir (bkz. Dockerfile.assets).
+Runs in the ps3-assets Docker image (see Dockerfile.assets).
 
-RSX kisitlari:
-  - Kenar uzunluklari 2'nin kuvveti olmali
-  - Dogrusal (linear) yerlesimde satirlar 64 bayta hizali olmali; bu bicimde
-    genislik*4 zaten 64'un kati oldugu icin ek dolgu gerekmiyor
-  - Bayt sirasi ARGB, big-endian (PPU ile ayni)
+RSX constraints:
+  - Edge lengths must be powers of two
+  - In linear layout rows must be 64-byte aligned; width*4 is already a
+    multiple of 64 here, so no padding is needed
+  - Byte order ARGB, big-endian (same as the PPU)
 
-Cikti bicimi ("BWT1"):
-    magic    "BWT1"        4 bayt
-    doku sayisi            u32
-    her doku icin:
-        ad                 32 bayt
-        genislik, yukseklik  u32, u32
-        mip sayisi         u32
-        piksel verisi      genislik*yukseklik*4 (her mip icin, kuculerek)
+Output format ("BWT1"):
+    magic    "BWT1"        4 bytes
+    texture count          u32
+    for each texture:
+        name               32 bytes
+        width, height      u32, u32
+        mip count          u32
+        pixel data         width*height*4 (for each mip, shrinking)
 
-Mip zinciri uretilir: uzaktaki pist dokusunun titremesini (aliasing) onler.
+A mip chain is generated: it keeps the distant runway texture from
+shimmering (aliasing).
 """
 
 import os
@@ -27,7 +28,7 @@ import sys
 
 from PIL import Image
 
-# (cikti adi, dosya, hedef boyut)
+# (output name, file, target size)
 TEXTURES = [
     ('runway',   'runway_asphalt_color.jpg',  512),
     ('apron',    'apron_concrete_color.jpg',  512),
@@ -43,7 +44,7 @@ def is_pow2(n):
 
 
 def build_mips(img):
-    """Tam mip zinciri: 512, 256, 128 ... 1"""
+    """Full mip chain: 512, 256, 128 ... 1"""
     mips = [img]
     w, h = img.size
     while w > 1 or h > 1:
@@ -54,7 +55,7 @@ def build_mips(img):
 
 
 def pack(img):
-    """ARGB, big-endian bayt dizisi"""
+    """ARGB, big-endian byte array"""
     out = bytearray()
     for r, g, b, a in img.convert('RGBA').getdata():
         out += bytes((a, r, g, b))
@@ -69,7 +70,7 @@ def main():
     for name, filename, size in TEXTURES:
         path = os.path.join(src_dir, filename)
         if not os.path.exists(path):
-            print('  atlandi (yok): %s' % filename)
+            print('  skipped (missing): %s' % filename)
             continue
 
         img = Image.open(path).convert('RGBA')
@@ -77,7 +78,7 @@ def main():
             img = img.resize((size, size), Image.LANCZOS)
 
         if not (is_pow2(img.size[0]) and is_pow2(img.size[1])):
-            raise SystemExit('%s: kenarlar 2 kuvveti olmali' % filename)
+            raise SystemExit('%s: edges must be powers of two' % filename)
 
         mips = build_mips(img)
         data = b''.join(pack(m) for m in mips)
@@ -98,7 +99,7 @@ def main():
                 f.write(b'\0' * pad)
 
     total = sum(len(e[4]) for e in entries)
-    print('yazildi: %s  (%d doku, %.1f KB)' % (dst, len(entries), total / 1024.0))
+    print('written: %s  (%d textures, %.1f KB)' % (dst, len(entries), total / 1024.0))
 
 
 main()

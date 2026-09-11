@@ -3,14 +3,14 @@
 
 #include "input.h"
 
-#define ANALOG_DEAD 60      /* 128 merkezden sapma esigi */
+#define ANALOG_DEAD 60      /* threshold of deviation from the 128 centre */
 
 static padInfo padinfo;
 
-/* Pad baslatilirken ilk okumalarda gecersiz tus durumu gelebiliyor (gercek
- * DualShock 3'te olctuk: ilk gecerli karede KARE tusu basili gorunuyordu).
- * Veri seyrek geldigi icin bu deger uzun sure korunuyor ve kamera kilitlenmis
- * gibi donuyordu. Bu yuzden ilk gecerli okumalar atlanir. */
+/* Right after the pad starts, the first readings can carry an invalid
+ * button state (measured on a real DualShock 3: on the first valid frame
+ * SQUARE appeared held). Data arrives sparsely, so that value lingered and
+ * the camera seemed stuck turning. The first valid readings are skipped. */
 #define PAD_WARMUP_READS 4
 static int warmup[PP_MAX_PADS];
 static float axis_lx, axis_ly, axis_rx, axis_ry;
@@ -31,8 +31,9 @@ void input_exit(void)
     ioPadEnd();
 }
 
-/* padData alanlarini tek bir bit maskesinde toplar. Analog cubuk d-pad ile
- * ayni bitleri sürer; boylece hem tutma hem kenar algilama tek yerden gelir. */
+/* Packs the padData fields into one bit mask. The analogue stick drives
+ * the same bits as the d-pad, so both hold and edge detection come from
+ * one place. */
 static unsigned int pack(const padData *p)
 {
     unsigned int b = 0;
@@ -54,11 +55,11 @@ static unsigned int pack(const padData *p)
     if (p->BTN_L3)     b |= PAD_L3;
     if (p->BTN_R3)     b |= PAD_R3;
 
-    /* Analog cubuk: bazi ortamlarda (orn. RPCS3 klavye modu) analog verisi hic
-     * gelmez ve tum eksenler 0 kalir. Bunu "cubuk tam yukarida" sanmamak icin,
-     * iki eksen de tam 0 iken analog girdisi yok sayilir. Gercek bir cubukta
-     * her iki eksenin ayni anda tam 0 olmasi sol-ust koseye tam dayanmak
-     * demektir; o durumda da d-pad zaten calisir. */
+    /* Analogue stick: in some environments (e.g. RPCS3 keyboard mode) no
+     * analogue data arrives and every axis stays 0. So that this is not taken
+     * for "stick fully up", analogue input is ignored while both axes are
+     * exactly 0. On a real stick both axes at exactly 0 means pushed hard into
+     * the top-left corner; the d-pad still works in that case. */
     if (!(p->ANA_L_H == 0 && p->ANA_L_V == 0)) {
         if (p->ANA_L_V < 128 - ANALOG_DEAD) b |= PAD_UP;
         if (p->ANA_L_V > 128 + ANALOG_DEAD) b |= PAD_DOWN;
@@ -67,9 +68,9 @@ static unsigned int pack(const padData *p)
     return b;
 }
 
-/* Ham eksen degerini (0..255, merkez 128) -1..+1 araligina cevirir.
- * Olu bolge disi kalan kisim yeniden olceklenir, boylece esigin hemen
- * disinda ani sicrama olmaz. */
+/* Converts a raw axis value (0..255, centre 128) to -1..+1.
+ * The part outside the dead zone is rescaled so there is no jump just past
+ * the threshold. */
 static float axis_norm(unsigned char raw)
 {
     float v = ((float)raw - 128.0f) / 127.0f;   /* -1 .. +1 */
@@ -82,15 +83,16 @@ static float axis_norm(unsigned char raw)
     return 0.0f;
 }
 
-/* Bir cubugun iki ekseni birlikte cozulur, cunku "analog verisi hic gelmiyor"
- * durumu ancak ikisine birden bakarak anlasilir: her iki eksen de tam 0 ise
- * cubuk sol-ust koseye tam dayanmis degil, ortam analog gondermiyor demektir.
+/* Both axes of a stick are resolved together, because "no analogue data"
+ * can only be told by looking at both: if both axes are exactly 0, the
+ * stick is not pushed into the top-left corner - the environment simply
+ * sends no analogue data.
  *
- * Bu koruma once yalnizca d-pad sentezine uygulanmisti; eksenler koşulsuz
- * okundugu icin RPCS3 klavye modunda oyun acilir acilmaz axis_lx -1.0
- * takiliyordu. Sonuc: 'a' tusu hicbir sey degistirmedigi icin olusuz
- * gorunuyor, 'd' tusuna basildiginda emulator gercek analog gondermeye
- * basliyor ve merkez 128e oturuyor - ancak ondan sonra 'a' calisiyor. */
+ * This guard used to apply only to d-pad synthesis; the axes were read
+ * unconditionally, so in RPCS3's keyboard mode axis_lx stuck at -1.0 the
+ * moment the game started. The result: 'a' seemed dead because it changed
+ * nothing, pressing 'd' made the emulator start sending real analogue data
+ * centred at 128, and only after that did 'a' work. */
 static void axis_pair(unsigned char h, unsigned char v, float *ox, float *oy)
 {
     if (h == 0 && v == 0) {
@@ -113,10 +115,10 @@ void input_update(void)
         prev_btn[i] = cur_btn[i];
 
         if (padinfo.status[i] == 0) {
-            /* kol cikarildi: tuslar birakilmis, cubuklar merkezde sayilir */
+            /* pad removed: buttons count as released, sticks as centred */
             connected[i] = 0;
             cur_btn[i] = 0;
-            warmup[i] = 0;              /* kol yeniden takilirsa tekrar isin */
+            warmup[i] = 0;              /* start over if the pad is plugged in again */
             if (i == 0) {
                 axis_lx = axis_ly = 0.0f;
                 axis_rx = axis_ry = 0.0f;
@@ -126,15 +128,15 @@ void input_update(void)
 
         connected[i] = 1;
 
-        /* PS3 pad API'si her karede veri vermez. data.len == 0 ise bu karede
-         * YENI VERI YOKTUR ve yapinin icerigi gecersizdir (eksenler 0 gelir).
-         * Bu kontrol olmadan eksenler "cubuk sonuna kadar itilmis" gibi
-         * okunur ve kamera kendi kendine surukleni r. Veri yoksa onceki
-         * karenin durumu korunur. */
+        /* The PS3 pad API does not deliver data every frame. data.len == 0 means
+         * there is NO NEW DATA this frame and the struct contents are invalid (the
+         * axes read 0). Without this check the axes read as "stick pushed all the
+         * way" and the camera drifted on its own. With no data, the previous
+         * frame's state is kept. */
         if (ioPadGetData(i, &data) == 0 && data.len > 0) {
             if (warmup[i] < PAD_WARMUP_READS) {
                 warmup[i]++;
-                continue;               /* baslatma verisi: yok say */
+                continue;               /* start-up data: ignore */
             }
 
             cur_btn[i] = pack(&data);
@@ -144,7 +146,7 @@ void input_update(void)
                 axis_pair(data.ANA_R_H, data.ANA_R_V, &axis_rx, &axis_ry);
             }
         }
-        /* data.len == 0: cur_btn ve eksenler oldugu gibi birakilir */
+        /* data.len == 0: cur_btn and the axes are left as they are */
     }
 }
 
@@ -199,9 +201,10 @@ int input_any_dir_pressed(void)
     return 0;
 }
 
-/* Analog cubuk yoksa (orn. emulatorde klavye) yon tuslari ve omuz tuslari
- * tam guc yedek olarak devreye girer; boylece kamera her ortamda surulebilir.
- * Analog varsa o oncelikli, cunku orantili hiz veriyor. */
+/* Without an analogue stick (e.g. keyboard in an emulator) the direction
+ * and shoulder buttons step in as full-strength fallbacks, so the camera
+ * can be driven anywhere. Analogue takes priority when present, because it
+ * gives proportional speed. */
 static float axis_or(float a, float dpad)
 {
     float aa = a < 0.0f ? -a : a;
@@ -224,9 +227,10 @@ float input_axis_left_y(void)
     return axis_or(axis_ly, d);
 }
 
-/* Bakis oncelikle sag analogdan gelir. Analog yoksa (emulatorde klavye)
- * yuz tuslari yedek olarak kullanilabilir; ancak bu yedek yalnizca menu
- * kapaliyken aciktir, aksi halde menu onay tusuyla cakisir. */
+/* Looking comes from the right stick first. Without analogue (keyboard in
+ * an emulator) the face buttons can act as a fallback; that fallback is
+ * only on while the menu is closed, otherwise it clashes with the menu's
+ * confirm button. */
 static int look_keys_enabled = 1;
 
 void input_set_look_keys(int enabled)
@@ -245,16 +249,15 @@ float input_axis_right_x(void)
     return axis_or(axis_rx, d);
 }
 
-/* --- ucus: sag analog, yedegi yon tuslari --- */
+/* --- flight: right stick, fallback on the d-pad --- */
 float input_flight_pitch(void)
 {
     float d = 0.0f;
 
-    if (input_held(0, PAD_UP))   d =  1.0f;   /* burun yukari */
+    if (input_held(0, PAD_UP))   d =  1.0f;   /* nose up */
     if (input_held(0, PAD_DOWN)) d = -1.0f;
 
-    /* Eksen yukari itildiginde ham deger negatif gelir; burun yukari
-     * pozitif olacak sekilde cevrilir. */
+    /* Pushing the stick up gives a negative raw value; flipped so nose-up is positive. */
     return axis_or(-axis_ry, d);
 }
 
@@ -267,7 +270,7 @@ float input_flight_roll(void)
     return axis_or(axis_rx, d);
 }
 
-/* --- kamera: sol analog, yedegi yok (yon tuslari ucusta kullaniliyor) --- */
+/* --- camera: left stick, no fallback (the d-pad is used for flying) --- */
 float input_cam_x(void)
 {
     return axis_lx;

@@ -1,19 +1,19 @@
 #ifndef MESH_H
 #define MESH_H
 
-/* Uctan uca ucgen mesh: tools/glb_to_mesh.py ile uretilen "BWM1" bicimi.
+/* End-to-end triangle mesh: the "BWM2" format produced by
+ * tools/glb_to_mesh.py.
  *
- * Veri EBOOT'a gomulu gelir ve big-endian float/u16 icerir, yani PPU'da
- * ek bir bayt cevrimi gerekmez. Modul yalnizca isaretci hesaplar; kopya
- * yapmaz. */
+ * The data comes embedded in the EBOOT and holds big-endian floats/u16, so
+ * the PPU needs no byte swapping. The module only computes pointers; it
+ * does not copy. */
 
-/* Gercek ucak modellerinde her hareketli yuzey ayri parca oluyor: kendi
- * urettigimiz jet 27, 737 varligi 41 parca. Sinir once 16, sonra 40 idi ve
- * her ikisinde de model sessizce reddedildi - mesh testi ikisini de
- * yakaladi. */
+/* In real aircraft models every moving surface is its own part: our own
+ * generated jet has 27, the 737 asset 41. The limit was 16, then 40, and
+ * both times the model was silently rejected - the mesh test caught both. */
 #define MESH_MAX_PARTS 64
 
-/* Vertex duzeni: x,y,z, nx,ny,nz, r,g,b, metallic */
+/* Vertex layout: x,y,z, nx,ny,nz, r,g,b, metallic */
 #define MESH_VERTEX_FLOATS 10
 #define MESH_VERTEX_BYTES  (MESH_VERTEX_FLOATS * 4)
 
@@ -21,29 +21,29 @@ typedef struct {
     char         name[32];
     unsigned int vertex_count;
     unsigned int index_count;
-    const float *verts;         /* MESH_VERTEX_FLOATS float */
+    const float *verts;         /* MESH_VERTEX_FLOATS floats */
     const unsigned short *idx;
 } MeshPart;
 
 typedef struct {
     int      part_count;
     MeshPart part[MESH_MAX_PARTS];
-    /* tum parcalari kapsayan sinir kutusu (yerel uzayda) */
+    /* bounding box of all parts (local space) */
     float    min[3];
     float    max[3];
 } Mesh;
 
-/* Gomulu veriyi cozumler. Basarili ise 0, bicim hatasinda -1. */
+/* Parses the embedded data. 0 on success, -1 on a format error. */
 int mesh_load(Mesh *m, const void *data, unsigned int size);
 
-/* Bir parcanin adiyla aranmasi; bulunamazsa -1 */
+/* Find a part by name; -1 if not found */
 int mesh_find(const Mesh *m, const char *name);
 
-/* Onek ile arama: gercek modellerde ayni yuzey birden cok panele bolunmus
- * olabiliyor (flap_left01..04). */
+/* Find by prefix: in real models one surface may be split into several
+ * panels (flap_left01..04). */
 int mesh_find_prefix(const Mesh *m, const char *prefix);
 
-/* Toplam ucgen sayisi (tani icin) */
+/* Total triangle count (diagnostics) */
 unsigned int mesh_triangles(const Mesh *m);
 
 #endif

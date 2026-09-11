@@ -11,26 +11,27 @@
 #include "skycolor.h"
 #include "atmosphere.h"
 
-/* Derleme sirasinda gomulen Cg programlari */
+/* Cg programs embedded at build time */
 #include "sky_vpo.h"
 #include "sky_fpo.h"
 #include "water_vpo.h"
 #include "water_fpo.h"
 
-/* Dalga ornekleme kurali: izgara hucresi, en kucuk geometri dalgasinin
- * yariisindan buyuk olmamali. 3000/96 = 31 birim hucre; vertex'te tasinan
- * dalgalar 140 ve 74 birim oldugu icin rahatca ornekleniyor. Daha kucuk
- * dalgalar geometride degil, fragment'ta normal olarak hesaplanir. */
+/* Wave sampling rule: a grid cell must be no larger than half the smallest
+ * geometry wave. 3000/96 = 31-unit cells; the vertex waves are 140 and 74
+ * units, so they are sampled comfortably. Smaller waves are not geometry
+ * but normals computed in the fragment program. */
 #define SEA_SIZE      4000.0f
 #define SEA_DIV       100
-#define GRID_SPACING  50.0f     /* duzlem kaydirma adimi */
+#define GRID_SPACING  50.0f     /* plane shift step */
 #define FOG_DISTANCE  1500.0f
 
 #define VERT_COUNT  ((SEA_DIV + 1) * (SEA_DIV + 1))
 #define INDEX_COUNT (SEA_DIV * SEA_DIV * 6)
 
-/* Calisan referans ornekle ayni vertex duzeni: konum + normal + doku
- * koordinati. Gokyuzu dortgeninde "normal" alani bakis yonunu tasir. */
+/* Same vertex layout as the working reference sample: position + normal +
+ * texture coordinate. On the sky quad the "normal" field carries the view
+ * direction. */
 typedef struct {
     float x, y, z;
     float nx, ny, nz;
@@ -57,12 +58,12 @@ static void *sky_fp_ucode = NULL;
 static u32  *sky_fp_buf = NULL;
 static u32   sky_fp_off = 0;
 
-/* su programi sabitleri */
+/* water program constants */
 static rsxProgramConst *w_mvp, *w_time_v, *w_woff;
 static rsxProgramConst *w_eye, *w_sun, *w_time_f, *w_fog;
 static rsxProgramConst *w_suncol, *w_hor, *w_zen, *w_cloud, *w_water;
 static rsxProgramConst *w_wave, *w_wavelen;
-/* gokyuzu programi sabitleri */
+/* sky program constants */
 static rsxProgramConst *s_sun, *s_time;
 static rsxProgramConst *s_suncol, *s_hor, *s_zen, *s_cloud;
 static rsxProgramConst *s_fwd, *s_right, *s_up, *s_tan;
@@ -136,7 +137,7 @@ static int load_programs(void)
 {
     u32 sz = 0;
 
-    /* --- su --- */
+    /* --- water --- */
     rsxVertexProgramGetUCode(water_vp, &water_vp_ucode, &sz);
     w_mvp    = rsxVertexProgramGetConst(water_vp, "mvpMatrix");
     w_time_v = rsxVertexProgramGetConst(water_vp, "timeSec");
@@ -162,7 +163,7 @@ static int load_programs(void)
     w_cloud  = rsxFragmentProgramGetConst(water_fp, "cloudParams");
     w_water  = rsxFragmentProgramGetConst(water_fp, "waterParams");
 
-    /* --- gokyuzu --- */
+    /* --- sky --- */
     rsxVertexProgramGetUCode(sky_vp, &sky_vp_ucode, &sz);
 
     rsxFragmentProgramGetUCode(sky_fp, &sky_fp_ucode, &sz);
@@ -185,7 +186,7 @@ static int load_programs(void)
     s_up    = rsxVertexProgramGetConst(sky_vp, "camUp");
     s_tan   = rsxVertexProgramGetConst(sky_vp, "tanHalf");
 
-    printf("su: mvp=%p tv=%p eye=%p sun=%p fog=%p | gok: sun=%p time=%p\n",
+    printf("water: mvp=%p tv=%p eye=%p sun=%p fog=%p | sky: sun=%p time=%p\n",
            (void *)w_mvp, (void *)w_time_v, (void *)w_eye, (void *)w_sun,
            (void *)w_fog, (void *)s_sun, (void *)s_time);
     return 0;
@@ -204,7 +205,7 @@ int scene_init(void)
     return load_programs();
 }
 
-/* Uc oznitelik de baglanir (calisan referans kod boyle yapiyor). */
+/* All three attributes are bound (the working reference code does it this way). */
 static void bind_attribs(const Vertex3 *verts)
 {
     gcmContextData *ctx = rsx3d_context();
@@ -237,8 +238,8 @@ static void disable_user_clip(void)
                                GCM_USER_CLIP_PLANE_DISABLE);
 }
 
-/* Gokyuzu: ekrani kaplayan dortgen. Kose bakis yonleri kameradan turetilir
- * ve "normal" ozniteliginde tasinir. */
+/* Sky: a full-screen quad. The corner view directions come from the
+ * camera and travel in the "normal" attribute. */
 static void draw_sky(const Camera *cam, float time, const Atmosphere *atm)
 {
     gcmContextData *ctx = rsx3d_context();
@@ -278,9 +279,9 @@ static void draw_sky(const Camera *cam, float time, const Atmosphere *atm)
     cloud[3] = 0.0f;
     (void)i;
 
-    /* Gokyuzu her seyin arkasindadir: derinlik testi ve yazimi kapatilir.
-     * Aksi halde temizleme degeriyle karsilastirilip elenebiliyor ve ekranda
-     * yalnizca temizleme rengi kaliyor. */
+    /* The sky is behind everything: depth test and writes are turned off.
+     * Otherwise it can be compared against the clear value and rejected,
+     * leaving only the clear colour on screen. */
     rsxSetDepthTestEnable(ctx, GCM_FALSE);
     rsxSetDepthWriteEnable(ctx, 0);
 
@@ -306,7 +307,7 @@ static void draw_sky(const Camera *cam, float time, const Atmosphere *atm)
     rsxDrawIndexArray(ctx, GCM_TYPE_TRIANGLES, off, 6,
                       GCM_INDEX_TYPE_16B, GCM_LOCATION_RSX);
 
-    /* su icin derinlik testini geri ac */
+    /* turn the depth test back on for the water */
     rsxSetDepthTestEnable(ctx, GCM_TRUE);
     rsxSetDepthWriteEnable(ctx, 1);
 }
@@ -322,8 +323,8 @@ static void draw_water(const Camera *cam, const Mat4 *proj, float time,
     int k;
     u32 off;
 
-    /* Duzlem kamerayla birlikte kayar; kaydirma izgara adiminin katlarina
-     * yuvarlanir ki dalga deseni dunyada sabit kalsin. */
+    /* The plane moves with the camera; the shift is rounded to multiples of
+     * the grid step so the wave pattern stays fixed in the world. */
     float sx = floorf(cam->pos[0] / GRID_SPACING) * GRID_SPACING;
     float sz = floorf(cam->pos[2] / GRID_SPACING) * GRID_SPACING;
 

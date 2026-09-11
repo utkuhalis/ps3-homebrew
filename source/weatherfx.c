@@ -3,17 +3,17 @@
 #include "weatherfx.h"
 #include "overlay.h"
 
-#define RAIN_MAX     150     /* dusen yagmur cizgisi sayisi */
-#define DROPS_MAX     34     /* ekranda (camda) duran damlacik sayisi */
-#define RAIN_SPEED  1400.0f  /* dusme hizi (sanal piksel/saniye) */
+#define RAIN_MAX     150     /* number of falling rain streaks */
+#define DROPS_MAX     34     /* number of drops sitting on the screen (the glass) */
+#define RAIN_SPEED  1400.0f  /* fall speed (virtual pixels/second) */
 #define DROP_H        22
 #define DROP_W         2
 
 #define COL_RAIN   RGB(200, 220, 245)
 #define COL_FLASH  RGB(255, 255, 255)
 
-/* Konuma bagli sozde-rastgele deger (0..1). Deterministik oldugu icin
- * damlalar kare kare zıplamaz, duzgun akar. */
+/* Position-based pseudo-random value (0..1). It is deterministic, so drops
+ * do not jump frame to frame; they flow smoothly. */
 static float hash1(int i, int salt)
 {
     float n = sinf((float)i * 12.9898f + (float)salt * 78.233f) * 43758.5453f;
@@ -31,7 +31,7 @@ static void draw_rain(float amount, float time)
         float speed = RAIN_SPEED * (0.75f + 0.5f * hash1(i, 3));
         float span = OVL_H + DROP_H * 2.0f;
         float y = fmodf(phase * span + time * speed, span) - DROP_H;
-        /* hafif egik dusus */
+        /* slightly slanted fall */
         float drift = (y / OVL_H) * 18.0f;
 
         overlay_soft_blob((int)(x + drift), (int)y, DROP_W + 2, DROP_H,
@@ -39,8 +39,8 @@ static void draw_rain(float amount, float time)
     }
 }
 
-/* Simsek: duzensiz araliklarla kisa parlama. Iki asamali (on carpma +
- * asil carpma) oldugu icin gercekci hissettiriyor. */
+/* Lightning: short flashes at irregular intervals. Two stages (a leader and
+ * the main strike) make it feel real. */
 static void draw_lightning(float amount, float time)
 {
     float cycle = 5.3f;
@@ -59,12 +59,12 @@ static void draw_lightning(float amount, float time)
                            (int)(alpha * amount));
 }
 
-/* Ekrana (kokpit camina) carpip kalan damlalar.
+/* Drops that hit the screen (the cockpit glass) and stay.
  *
- * Her damla kendi omru boyunca belirir, buyur, agirlastikca hizlanarak
- * asagi suzulur ve arkasinda ince bir iz birakir. Sekil, cizim katmanindaki
- * "yumusak leke" ile olusturulur: dortgen fragment tarafinda merkezden disa
- * sonduruldugu icin kenarlar kare gorunmez. */
+ * Each drop appears, grows over its lifetime, slides down faster as it
+ * gets heavier and leaves a thin trail. The shape comes from the overlay's
+ * "soft blob": the quad fades out from the centre in the fragment program,
+ * so the edges do not look square. */
 static void draw_droplets(float amount, float time)
 {
     int count = (int)(DROPS_MAX * amount);
@@ -89,14 +89,14 @@ static void draw_droplets(float amount, float time)
         if (a <= 2 || s < 4.0f)
             continue;
 
-        /* damla: hafif dikey oval, ust ust iki katman (ortasi daha parlak) */
+        /* drop: a slightly tall oval, two layers on top of each other (brighter in the middle) */
         overlay_soft_blob((int)(x - s * 0.5f), (int)(y - s * 0.6f),
                           (int)s, (int)(s * 1.25f), COL_RAIN, a);
         overlay_soft_blob((int)(x - s * 0.28f), (int)(y - s * 0.32f),
                           (int)(s * 0.55f), (int)(s * 0.7f), COL_RAIN,
                           a * 3 / 4);
 
-        /* suzulme izi */
+        /* slide trail */
         if (k > 0.4f)
             overlay_soft_blob((int)(x - s * 0.16f), (int)(y - s * 1.5f),
                               (int)(s * 0.32f), (int)(s * 1.6f),

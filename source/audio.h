@@ -4,19 +4,19 @@
 #include "flight.h"
 #include "atmosphere.h"
 
-/* Ucus sesi: motor, ruzgar ve deniz.
+/* Flight audio: engine, wind and sea.
  *
- * Ses dosyasi kullanilmaz; dalga bicimleri her karede hesaplanir. Bu hem
- * dosya boyutunu sifirlar hem de sesin ucusa surekli tepki vermesini saglar:
- * gaz acilinca motor tizlesir, hiz artinca ruzgar siddetlenir, deniz
- * seviyesine inince dalga ugultusu yukselir.
+ * No sound files are used; waveforms are computed every frame. That keeps
+ * the file size at zero and lets the sound follow the flight continuously:
+ * the engine rises with throttle, the wind grows with speed, and the waves
+ * get louder near sea level.
  *
- * Ses ayri bir is parcaciginda uretilir; ana dongunun kare hizini etkilemez. */
+ * Audio is generated on its own thread and does not affect the frame rate. */
 
 int  audio_init(void);
 void audio_exit(void);
 
-/* Ana dongude her karede cagrilir; ses uretimi bu degerleri takip eder. */
+/* Called every frame from the main loop; synthesis follows these values. */
 void audio_update(const Flight *f, const Atmosphere *atm);
 
 #endif

@@ -2,13 +2,13 @@
 
 #include "waves.h"
 
-/* Dort dalga: farkli yon, dalga boyu, genlik ve hiz.
- * Yonler bilerek birbirine paralel degil; aksi halde su "cizgili" gorunur. */
+/* Four waves: different direction, wavelength, amplitude and speed.
+ * The directions are deliberately not parallel; otherwise the water looks "striped". */
 typedef struct {
-    float dx, dz;   /* yayilma yonu (birim) */
-    float len;      /* dalga boyu (birim) */
-    float amp;      /* genlik (birim) */
-    float speed;    /* ilerleme hizi */
+    float dx, dz;   /* direction of travel (unit) */
+    float len;      /* wavelength (units) */
+    float amp;      /* amplitude (units) */
+    float speed;    /* travel speed */
 } Wave;
 
 static const Wave WAVES[4] = {
@@ -41,7 +41,7 @@ void wave_normal(float x, float z, float time, float out[3])
     float len;
     int i;
 
-    /* Egim analitik turevden: yaklasik fark yerine dogrudan cosinus */
+    /* Slope from the analytic derivative: a cosine directly instead of a finite difference */
     for (i = 0; i < 4; i++) {
         const Wave *w = &WAVES[i];
         float k = TWO_PI / w->len;
@@ -52,7 +52,7 @@ void wave_normal(float x, float z, float time, float out[3])
         dhdz += c * w->dz;
     }
 
-    /* Yuzey normali: (-dh/dx, 1, -dh/dz) normalize */
+    /* Surface normal: (-dh/dx, 1, -dh/dz) normalised */
     out[0] = -dhdx;
     out[1] = 1.0f;
     out[2] = -dhdz;

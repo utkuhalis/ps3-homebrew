@@ -1,10 +1,10 @@
-/* Gokyuzu ve su formullerini host'ta isin atarak render eder.
+/* Renders the sky and water formulas on the host by ray casting.
  *
- * Amac: shader'lara cevirmeden once "gunes dogru yerde mi, bulutlar nasil
- * duruyor, dalga cok mu sert, yansima inandirici mi" sorularini yanitlamak.
- * PS3 veya emulator gerekmez.
+ * The goal: answer "is the sun in the right place, how do the clouds look,
+ * are the waves too harsh, is the reflection convincing" before porting to
+ * the shaders. No PS3 or emulator needed.
  *
- * Calistirma: tests/scene_preview.sh */
+ * Run: tests/scene_preview.sh */
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -33,8 +33,8 @@ static void normalize3(float v[3])
     if (l > 1e-6f) { v[0] /= l; v[1] /= l; v[2] /= l; }
 }
 
-/* Deniz yuzeyi ile kesisim: once duz duzlemle kaba kesisim, sonra dalga
- * yuksekligini hesaba katarak birkac adim iyilestirme. */
+/* Intersection with the sea surface: a rough hit with the flat plane
+ * first, then a few refinement steps that account for wave height. */
 static int trace_water(const float eye[3], const float dir[3], float time,
                        float hit[3])
 {
@@ -42,9 +42,9 @@ static int trace_water(const float eye[3], const float dir[3], float time,
     int i;
 
     if (dir[1] >= -0.0005f)
-        return 0;                       /* yukari veya ufka paralel bakis */
+        return 0;                       /* looking up or parallel to the horizon */
 
-    t = -eye[1] / dir[1];               /* y = 0 duzlemi */
+    t = -eye[1] / dir[1];               /* y = 0 plane */
     if (t <= 0.0f || t > 20000.0f)
         return 0;
 
@@ -74,23 +74,23 @@ static void water_color(const float eye[3], const float dir[3],
 
     wave_normal(hit[0], hit[2], time, n);
 
-    /* Yansima yonu: r = d - 2(d.n)n */
+    /* Reflection direction: r = d - 2(d.n)n */
     ndotv = dir[0]*n[0] + dir[1]*n[1] + dir[2]*n[2];
     for (i = 0; i < 3; i++)
         refl[i] = dir[i] - 2.0f * ndotv * n[i];
     normalize3(refl);
-    if (refl[1] < 0.0f) refl[1] = -refl[1];   /* asagi yansimayi yukari kivir */
+    if (refl[1] < 0.0f) refl[1] = -refl[1];   /* fold a downward reflection upwards */
 
     sky_color(refl, time, sky);
 
-    /* Fresnel (Schlick): sig acida yansima baskin, dik bakista su rengi */
+    /* Fresnel (Schlick): reflection dominates at grazing angles, water colour when looking down */
     fres = 0.02f + 0.98f * powf(1.0f - clampf(-ndotv, 0.0f, 1.0f), 5.0f);
     fres = clampf(fres, 0.0f, 1.0f);
 
     for (i = 0; i < 3; i++)
         out[i] = mixf(deep[i], sky[i], fres);
 
-    /* Gunes parlamasi (Blinn-Phong): dalgalar uzerinde kipirdayan isik yolu */
+    /* Sun glitter (Blinn-Phong): a light path shimmering on the waves */
     for (i = 0; i < 3; i++)
         spec_dir[i] = SUN_DIR[i] - dir[i];
     normalize3(spec_dir);
@@ -102,7 +102,7 @@ static void water_color(const float eye[3], const float dir[3],
     out[1] += spec * 0.95f;
     out[2] += spec * 0.80f;
 
-    /* Mesafeyle ufuk rengine karisma */
+    /* Blend to the horizon colour with distance */
     dist = sqrtf((hit[0]-eye[0])*(hit[0]-eye[0]) +
                  (hit[1]-eye[1])*(hit[1]-eye[1]) +
                  (hit[2]-eye[2])*(hit[2]-eye[2]));
@@ -167,25 +167,25 @@ int main(void)
 {
     Camera c;
 
-    /* 1) deniz seviyesinden ufka bakis */
+    /* 1) looking at the horizon from sea level */
     camera_init(&c);
     c.pos[1] = 12.0f;
     render(&c, 3.0f, "build-test/sahne-01-ufuk.ppm");
 
-    /* 2) yuksekten hafif asagi bakis */
+    /* 2) looking slightly down from altitude */
     camera_init(&c);
     c.pos[1] = 90.0f;
     c.pitch = -0.30f;
     render(&c, 7.0f, "build-test/sahne-02-yuksek.ppm");
 
-    /* 3) gunese dogru bakis (parlama yolu gorunmeli) */
+    /* 3) looking towards the sun (the glitter path should show) */
     camera_init(&c);
     c.pos[1] = 25.0f;
     c.yaw = atan2f(SUN_DIR[0], -SUN_DIR[2]);
     c.pitch = -0.05f;
     render(&c, 11.0f, "build-test/sahne-03-gunes.ppm");
 
-    /* 4) yukari bakis (gokyuzu ve bulutlar) */
+    /* 4) looking up (sky and clouds) */
     camera_init(&c);
     c.pos[1] = 30.0f;
     c.pitch = 0.55f;

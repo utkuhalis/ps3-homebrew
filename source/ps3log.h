@@ -1,13 +1,13 @@
 #ifndef PS3LOG_H
 #define PS3LOG_H
 
-/* Gercek PS3'te teshis kaydi.
+/* Diagnostic log on a real PS3.
  *
- * Emulatorde printf ciktisi TTY'den okunabiliyor, ancak konsolda boyle bir
- * imkan yok. Bu yuzden onemli adimlar dosyaya yazilir; siyah ekran durumunda
- * bile dosya FTP ile alinip nereye kadar gidildigi gorulebilir.
+ * In the emulator printf output can be read from the TTY, but the console
+ * has no such thing. So the important steps are written to a file; even
+ * on a black screen the file can be fetched over FTP to see how far it got.
  *
- * Dosya: /dev_hdd0/tmp/basicwater.log */
+ * File: /dev_hdd0/tmp/basicwater.log */
 
 void ps3log_open(void);
 void ps3log(const char *fmt, ...);

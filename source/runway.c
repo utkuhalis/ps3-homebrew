@@ -12,11 +12,11 @@
 #include "tex_vpo.h"
 #include "tex_fpo.h"
 
-/* Kalkis ve inis pistleri. Yonleri farkli ki kalkis ile inis ayni
- * hissettirmesin. */
+/* Departure and arrival runways. Their headings differ so that departure
+ * and arrival do not feel the same. */
 const float RUNWAY_POS[RUNWAY_COUNT][2] = {
-    { -1500.0f,  1200.0f },     /* kalkis */
-    {  1600.0f, -1400.0f }      /* inis */
+    { -1500.0f,  1200.0f },     /* departure */
+    {  1600.0f, -1400.0f }      /* arrival */
 };
 
 static const float RUNWAY_ANGLE[RUNWAY_COUNT] = { 0.55f, -0.85f };
@@ -34,12 +34,12 @@ typedef struct {
     float x, y, z;
     float r, g, b;
     float bright, pad;
-    float u, v;                 /* doku koordinati */
+    float u, v;                 /* texture coordinate */
 } SolidVertex;
 
-/* Her pist: platform + asfalt + esik cizgileri + orta cizgi parcalari */
+/* Each runway: platform + asphalt + threshold bars + centre line segments */
 #define STRIPES        9
-/* cim + omuz + asfalt + 2 esik + 2 kenar + orta cizgiler */
+/* grass + shoulder + asphalt + 2 thresholds + 2 edges + centre lines */
 #define QUADS_PER_RUNWAY (3 + 4 + STRIPES)
 #define TOTAL_QUADS    (QUADS_PER_RUNWAY * RUNWAY_COUNT)
 #define TOTAL_VERTS    (TOTAL_QUADS * 4)
@@ -60,12 +60,12 @@ static rsxProgramConst *c_mvp, *c_eye, *c_hor, *c_fog;
 static int tex_unit = 0;
 static int tex_index = -1;
 
-/* Yatay bir dortgen ekler: merkez (cx,cz), boyut (w x l), yatayda donuk */
-/* Dokunun kac dunya birimini kapladigi. Kucuk deger = sik tekrar. */
+/* Adds a horizontal quad: centre (cx,cz), size (w x l), rotated in the plane */
+/* How many world units one texture tile covers. Smaller = more repeats. */
 #define TEX_WORLD_SIZE 9.0f
 
-/* Yuzey tipleri: shader dokuyu bunlara gore uretir.
- * 0 duz renk (cizgiler, isaretler), 1 asfalt, 2 cim, 3 beton */
+/* Surface types: the shader generates the pattern from these.
+ * 0 flat colour (lines, markings), 1 asphalt, 2 grass, 3 concrete */
 #define SURF_PLAIN    0.0f
 #define SURF_ASPHALT  1.0f
 #define SURF_GRASS    2.0f
@@ -96,9 +96,9 @@ static void add_quad(float cx, float cz, float y, float w, float l,
         v[i].bright = bright;
         v[i].pad = quad_surface;
 
-        /* UV dunya olceginde: doku parca boyutundan bagimsiz olarak ayni
-         * sikilikta tekrar eder, boylece pist ve cevresi ayni dokuda
-         * farkli olcekte gorunmez. */
+        /* UVs are in world scale: the pattern repeats at the same rate whatever
+         * the piece's size, so the runway and its surroundings do not show the
+         * same pattern at different scales. */
         v[i].u = (cx + ox[i] * ca - oz[i] * sa) / TEX_WORLD_SIZE;
         v[i].v = (cz + ox[i] * sa + oz[i] * ca) / TEX_WORLD_SIZE;
     }
@@ -115,27 +115,27 @@ static void build_runway(int index)
     float ca = cosf(a), sa = sinf(a);
     int i;
 
-    /* Cevre arazi: pist tek basina denizin ustunde yuzen bir serit gibi
-     * duruyordu. Genis bir cim alan onu bir havaalanina benzetiyor. */
+    /* Surrounding land: on its own the runway looked like a strip floating on
+     * the sea. A wide grass field makes it look like an airfield. */
     quad_surface = SURF_GRASS;
     add_quad(cx, cz, y - 1.2f, RUNWAY_WIDTH + 520.0f, RUNWAY_LENGTH + 700.0f,
              a, 0.34f, 0.42f, 0.24f, 1.0f);
 
-    /* omuz: asfaltin iki yanindaki beton serit */
+    /* shoulder: concrete strips on both sides of the asphalt */
     quad_surface = SURF_CONCRETE;
     add_quad(cx, cz, y - 0.6f, RUNWAY_WIDTH + 46.0f, RUNWAY_LENGTH + 60.0f, a,
              0.52f, 0.53f, 0.55f, 1.0f);
 
-    /* Asfalt. Onceki renk (0.13) neredeyse siyahti; gercek asfalt bundan
-     * belirgin sekilde acik ve dokulu. */
+    /* Asphalt. The old colour (0.13) was nearly black; real asphalt is
+     * clearly lighter and has texture. */
     quad_surface = SURF_ASPHALT;
     add_quad(cx, cz, y, RUNWAY_WIDTH, RUNWAY_LENGTH, a,
              0.30f, 0.31f, 0.33f, 1.0f);
 
-    /* isaretler duz renk kalir */
+    /* markings stay flat colour */
     quad_surface = SURF_PLAIN;
 
-    /* iki uctaki esik bantlari */
+    /* threshold bands at both ends */
     for (i = 0; i < 2; i++) {
         float off = (i == 0 ? -1.0f : 1.0f) * (RUNWAY_LENGTH * 0.5f - 22.0f);
 
@@ -143,7 +143,7 @@ static void build_runway(int index)
                  RUNWAY_WIDTH - 14.0f, 12.0f, a, 0.92f, 0.93f, 0.95f, 1.0f);
     }
 
-    /* kenar cizgileri */
+    /* edge lines */
     for (i = 0; i < 2; i++) {
         float off = (i == 0 ? -1.0f : 1.0f) * (RUNWAY_WIDTH * 0.5f - 5.0f);
 
@@ -151,7 +151,7 @@ static void build_runway(int index)
                  3.0f, RUNWAY_LENGTH - 30.0f, a, 0.85f, 0.86f, 0.88f, 1.0f);
     }
 
-    /* orta cizgi: kesikli */
+    /* centre line: dashed */
     for (i = 0; i < STRIPES; i++) {
         float t = ((float)i / (STRIPES - 1) - 0.5f) * (RUNWAY_LENGTH - 90.0f);
 
@@ -196,9 +196,9 @@ int runway_init(void)
     if (rsxAddressToOffset(fp_buf, &fp_off) != 0)
         return -3;
 
-    /* Shader'da tek sampler var, o da 0. birime duser.
-     * (rsxFragmentProgramGetAttribIndex basliкta bildirilmis ama librsx
-     * icinde tanimli degil, o yuzden yansima ile sorulamiyor.) */
+    /* The shader has a single sampler, which lands on unit 0.
+     * (rsxFragmentProgramGetAttribIndex is declared in the header but not
+     * defined in librsx, so it cannot be queried.) */
     tex_unit = 0;
 
     c_eye = rsxFragmentProgramGetConst(fp, "eyePosition");

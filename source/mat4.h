@@ -1,15 +1,15 @@
 #ifndef MAT4_H
 #define MAT4_H
 
-/* 4x4 matris matematigi. Donanim bagimsiz, birim testli.
+/* 4x4 matrix maths. Hardware independent, unit tested.
  *
- * Saklama duzeni: ROW-MAJOR, m[satir * 4 + sutun].
- * Vektorler sutun vektoru kabul edilir: v' = M * v.
+ * Storage: ROW-MAJOR, m[row * 4 + column].
+ * Vectors are column vectors: v' = M * v.
  *
- * Not: RSX shader sabitlerine bu dizi dogrudan gonderilir. PSL1GHT ornekleri
- * Vectormath kullanir (column-major saklar) ve RSX'e vermeden once transpose
- * eder; transpose edilmis column-major = row-major, yani bizim duzenimiz
- * zaten dogru olandir ve ek bir transpose gerekmez. */
+ * Note: this array goes to the RSX shader constants as is. The PSL1GHT
+ * samples use Vectormath (column-major storage) and transpose before
+ * handing it to RSX; transposed column-major = row-major, so our layout is
+ * already the right one and no extra transpose is needed. */
 
 typedef struct {
     float m[16];
@@ -24,7 +24,7 @@ Mat4 mat4_translation(float x, float y, float z);
 
 void mat4_transform(const Mat4 *a, const float v[4], float out[4]);
 
-/* vektor yardimcilari */
+/* vector helpers */
 void  vec3_set(float out[3], float x, float y, float z);
 void  vec3_add_scaled(float out[3], const float v[3], float s);
 void  vec3_sub(float out[3], const float a[3], const float b[3]);

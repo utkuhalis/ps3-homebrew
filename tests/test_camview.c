@@ -1,5 +1,5 @@
-/* Kamera bakis acilari ve suni ufuk matematigi - host tarafi testler.
- * PS3 gerekmez; overlay ve ucak modeli icin bos stub'lar kullanilir. */
+/* Camera view angles and artificial horizon maths - host-side tests.
+ * No PS3 needed; empty stubs stand in for the overlay and the aircraft model. */
 
 #include <stdio.h>
 #include <math.h>
@@ -25,12 +25,12 @@ static void near(float got, float want, float tol, const char *what)
     if (d < 0)
         d = -d;
     if (d > tol) {
-        printf("FAIL: %s (beklenen %.3f, gelen %.3f)\n", what, want, got);
+        printf("FAIL: %s (expected %.3f, got %.3f)\n", what, want, got);
         failures++;
     }
 }
 
-/* --- stub'lar: bu testler cizim ve ucak modeli kullanmaz --- */
+/* --- stubs: these tests use neither drawing nor the aircraft model --- */
 void overlay_fill_rect(int x, int y, int w, int h, unsigned int c)
 { (void)x; (void)y; (void)w; (void)h; (void)c; }
 void overlay_blend_rect(int x, int y, int w, int h, unsigned int c, int a)
@@ -52,24 +52,24 @@ int main(void)
 {
     float eye[3], target[3], yaw, pitch;
 
-    /* --- look_at: temel yonler --- */
+    /* --- look_at: basic directions --- */
     eye[0] = 0; eye[1] = 0; eye[2] = 0;
 
     target[0] = 0; target[1] = 0; target[2] = -10;      /* -Z: yaw 0 */
     flightcam_look_at(eye, target, &yaw, &pitch);
-    near(yaw, 0.0f, 0.001f, "-Z yonune bakista yaw 0");
-    near(pitch, 0.0f, 0.001f, "-Z yonune bakista pitch 0");
+    near(yaw, 0.0f, 0.001f, "looking towards -Z gives yaw 0");
+    near(pitch, 0.0f, 0.001f, "looking towards -Z gives pitch 0");
 
     target[0] = 10; target[1] = 0; target[2] = 0;       /* +X: yaw +90 */
     flightcam_look_at(eye, target, &yaw, &pitch);
-    near(yaw, 1.5708f, 0.001f, "+X yonune bakista yaw +90 derece");
+    near(yaw, 1.5708f, 0.001f, "looking towards +X gives yaw +90 degrees");
 
-    target[0] = 0; target[1] = 10; target[2] = 0;       /* yukari */
+    target[0] = 0; target[1] = 10; target[2] = 0;       /* up */
     flightcam_look_at(eye, target, &yaw, &pitch);
-    near(pitch, 1.5708f, 0.001f, "yukari bakista pitch +90 derece");
-    printf("test: look_at temel yonleri dogru veriyor\n");
+    near(pitch, 1.5708f, 0.001f, "looking up gives pitch +90 degrees");
+    printf("test: look_at gives the basic directions right\n");
 
-    /* --- takip kamerasi ucagi hep merkezde tutar --- */
+    /* --- the chase camera keeps the aircraft centred --- */
     {
         Flight f;
         Camera cam;
@@ -79,7 +79,7 @@ int main(void)
             float fwd[3], dot, len;
             int i;
 
-            /* ucagi cesitli yonlere cevirip kamerayi yakinsatalim */
+            /* turn the aircraft various ways and let the camera converge */
             for (i = 0; i < 3; i++)
                 f.pos[i] = 0.0f;
             f.pos[1] = 100.0f;
@@ -92,7 +92,7 @@ int main(void)
             for (i = 0; i < 200; i++)
                 flightcam_update(&cam, CAM_CHASE, &f, 1.0f / 60.0f);
 
-            /* kameranin ileri yonu ucaga dogru olmali */
+            /* the camera's forward vector must point at the aircraft */
             fwd[0] = cosf(cam.pitch) * sinf(cam.yaw);
             fwd[1] = sinf(cam.pitch);
             fwd[2] = -cosf(cam.pitch) * cosf(cam.yaw);
@@ -106,42 +106,42 @@ int main(void)
                 dot = (d[0]*fwd[0] + d[1]*fwd[1] + d[2]*fwd[2]) / len;
             }
 
-            /* Kamera burnun biraz onune bakiyor, o yuzden birebir 1.0 degil;
-             * ucagin ekran disinda kalmadigini gostermek icin bu yeterli. */
-            check(dot > 0.90f, "takip kamerasi ucaga bakiyor");
+            /* The camera looks a little ahead of the nose, so it is not exactly 1.0;
+             * this is enough to show the aircraft does not leave the screen. */
+            check(dot > 0.90f, "chase camera looks at the aircraft");
 
-            /* kamera ucagin ARKASINDA olmali: burun yonunun tersinde */
+            /* the camera must be BEHIND the aircraft: opposite to the nose direction */
             {
                 float back[3], bd;
                 back[0] = cam.pos[0] - f.pos[0];
                 back[2] = cam.pos[2] - f.pos[2];
                 bd = back[0] * sinf(head) + back[2] * (-cosf(head));
-                check(bd < 0.0f, "takip kamerasi ucagin arkasinda");
+                check(bd < 0.0f, "chase camera is behind the aircraft");
             }
         }
-        printf("test: takip kamerasi her yonelimde ucagi merkezde tutuyor\n");
+        printf("test: chase camera keeps the aircraft centred in every attitude\n");
     }
 
-    /* --- suni ufuk isaretleri --- */
+    /* --- artificial horizon signs --- */
     near(gauge_horizon_shift(0.0f, 52.0f), 0.0f, 0.001f,
-         "duz ucusta ufuk merkezde");
+         "horizon centred in level flight");
     check(gauge_horizon_shift(0.5f, 52.0f) < 0.0f,
-          "burun yukari iken ufuk asagi kayar");
+          "horizon moves down with the nose up");
     check(gauge_horizon_shift(-0.5f, 52.0f) > 0.0f,
-          "burun asagi iken ufuk yukari kayar");
+          "horizon moves up with the nose down");
 
-    /* duz ucusta gostergenin ustu gokyuzu, alti toprak olmali.
-     * ekran y'si asagi pozitif: dy < 0 ust. */
+    /* in level flight the top of the gauge must be sky and the bottom ground.
+     * screen y is positive down: dy < 0 is the top. */
     check(gauge_horizon_dist(0.0f, -20.0f, 0.0f, 0.0f) > 0.0f,
-          "duz ucusta gostergenin ustu gokyuzu");
+          "top of the gauge is sky in level flight");
     check(gauge_horizon_dist(0.0f, 20.0f, 0.0f, 0.0f) < 0.0f,
-          "duz ucusta gostergenin alti toprak");
-    printf("test: suni ufuk gokyuzu/toprak yonu dogru\n");
+          "bottom of the gauge is ground in level flight");
+    printf("test: artificial horizon sky/ground orientation correct\n");
 
-    /* --- ucak modeli gittigi yone bakmali --- */
+    /* --- the aircraft model must face where it is going --- */
     {
         Flight f;
-        float nose_local[3] = { 0.0f, 0.0f, -10.0f };   /* burun yonu */
+        float nose_local[3] = { 0.0f, 0.0f, -10.0f };   /* nose direction */
         float nose_world[3];
         float head;
 
@@ -157,17 +157,17 @@ int main(void)
 
             dx = nose_world[0];
             dz = nose_world[2];
-            fx = sinf(head);            /* flight.c forward_vec ile ayni */
+            fx = sinf(head);            /* same as forward_vec in flight.c */
             fz = -cosf(head);
             dot = (dx * fx + dz * fz) / 10.0f;
 
             check(dot > 0.999f,
-                  "ucak modelinin burnu ucus yonuyle ayni");
+                  "aircraft model nose matches the flight direction");
         }
-        printf("test: ucak modeli ucus yonune hizali\n");
+        printf("test: aircraft model aligned with the flight direction\n");
     }
 
-    /* --- yonelim matrisi body_to_world ile birebir ayni olmali --- */
+    /* --- the attitude matrix must match body_to_world exactly --- */
     {
         Flight f;
         float m[3][3];
@@ -201,7 +201,7 @@ int main(void)
 
                             if (d < 0) d = -d;
                             if (d > 0.0005f) {
-                                printf("FAIL: matris body_to_world'den sapiyor"
+                                printf("FAIL: matrix deviates from body_to_world"
                                        " (%.4f vs %.4f)\n", got[c], ref[c]);
                                 failures++;
                                 i = j = k = 99;
@@ -211,10 +211,10 @@ int main(void)
                 }
             }
         }
-        printf("test: yonelim matrisi body_to_world ile ayni\n");
+        printf("test: attitude matrix matches body_to_world\n");
     }
 
-    /* --- kamera carpismasi: govdeye ve zemine girmemeli --- */
+    /* --- camera collision: must not enter the body or the ground --- */
     {
         Camera c;
         float plane[3] = { 100.0f, 50.0f, -200.0f };
@@ -222,9 +222,9 @@ int main(void)
         float ang, pit;
         int inside = 0, below = 0;
 
-        printf("test: kamera govdeye ve zemine girmiyor\n");
+        printf("test: camera stays out of the body and the ground\n");
 
-        /* Her yonden ucagin TAM ICINE konumlandirmayi dene */
+        /* Try placing the camera right INSIDE the aircraft from every direction */
         for (ang = -3.1f; ang < 3.1f; ang += 0.4f) {
             for (pit = -1.4f; pit < 1.4f; pit += 0.35f) {
                 float dist;
@@ -251,18 +251,18 @@ int main(void)
             }
         }
 
-        check(inside == 0, "kamera hicbir yonden govdenin icinde kalmiyor");
-        check(below == 0, "kamera zeminin altina inmiyor");
+        check(inside == 0, "camera never ends up inside the body from any direction");
+        check(below == 0, "camera does not go below the ground");
 
-        /* Zemin kurali govde kuralini ezmemeli: ucak yerdeyken bile
-         * kamera zeminin uzerinde durur */
+        /* The ground rule must not override the body rule: even with the aircraft
+         * on the ground the camera stays above the ground */
         c.pos[0] = plane[0];
-        c.pos[1] = -500.0f;         /* cok asagida */
+        c.pos[1] = -500.0f;         /* far below */
         c.pos[2] = plane[2];
         flightcam_clamp(&c, plane, R, 9.0f);
-        check(c.pos[1] >= 9.0f, "asagidan gelen kamera zemine oturuyor");
+        check(c.pos[1] >= 9.0f, "camera coming from below settles on the ground");
 
-        /* Uzaktaki kamera hic oynatilmamali */
+        /* A camera far away must not be moved at all */
         c.pos[0] = plane[0] + 400.0f;
         c.pos[1] = plane[1] + 120.0f;
         c.pos[2] = plane[2];
@@ -270,15 +270,14 @@ int main(void)
             float before = c.pos[0];
 
             flightcam_clamp(&c, plane, R, 9.0f);
-            check(c.pos[0] == before, "engel disindaki kamera oynatilmiyor");
+            check(c.pos[0] == before, "camera clear of obstacles is not moved");
         }
     }
 
-    /* --- ucak pistteyken kamera pistin ALTINA inmemeli ---
-     * Bildirilen hata: kamera pistin yanina savruldugunda oradaki zemin
-     * deniz seviyesi oldugu icin 9 metre asagi iniyor, pist araya girip
-     * gorusu kapatiyordu. Zemin olarak ucagin altindaki yuzey de hesaba
-     * katilmali. */
+    /* --- with the aircraft on the runway the camera must not go UNDER it ---
+     * Reported bug: a camera swung out beside the runway found sea level
+     * there, dropped 9 metres and the runway came between it and the view.
+     * The surface under the aircraft must count as ground too. */
     {
         Camera c;
         Flight f;
@@ -286,14 +285,14 @@ int main(void)
         float g_cam, g_pl, ground;
         int i;
 
-        printf("test: ucak pistteyken kamera pist seviyesinin altina inmiyor\n");
+        printf("test: camera stays above runway level with the aircraft on the runway\n");
 
         flight_init_on_runway(&f, rw, 0.0f, 0.0f);
 
-        /* kamerayi pistin yaninda, cok asagida dene */
+        /* try the camera beside the runway, far below */
         for (i = 0; i < 8; i++) {
-            c.pos[0] = 200.0f + i * 60.0f;   /* pist genisliginin disi */
-            c.pos[1] = -50.0f;               /* deniz seviyesinin altinda */
+            c.pos[0] = 200.0f + i * 60.0f;   /* outside the runway width */
+            c.pos[1] = -50.0f;               /* below sea level */
             c.pos[2] = f.pos[2];
 
             g_cam = flightcam_ground_at(&f, c.pos[0], c.pos[2]);
@@ -303,10 +302,10 @@ int main(void)
             flightcam_clamp(&c, f.pos, 21.0f, ground);
 
             check(c.pos[1] >= DECK_Y,
-                  "pist yanindaki kamera pist yuzeyinin uzerinde kaliyor");
+                  "camera beside the runway stays above the runway surface");
         }
 
-        /* ucak denizin uzerindeyken pist kurali dayatilmamali */
+        /* the runway rule must not apply while the aircraft is over the sea */
         f.pos[0] = 8000.0f;
         f.pos[1] = 400.0f;
         f.pos[2] = 8000.0f;
@@ -320,11 +319,11 @@ int main(void)
         flightcam_clamp(&c, f.pos, 21.0f, ground);
 
         check(c.pos[1] < DECK_Y,
-              "acik denizde kamera gereksiz yere pist yuksekligine cikmiyor");
+              "over open sea the camera is not needlessly lifted to runway height");
     }
 
     if (failures == 0)
-        printf("\n40 kontrol, 0 hata\n");
+        printf("\n40 checks, 0 failures\n");
     else
         printf("\n%d HATA\n", failures);
     return failures ? 1 : 0;

@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
-"""GLB (glTF 2.0 ikili) -> Basic Water mesh formati.
+"""GLB (binary glTF 2.0) -> Basic Water mesh format.
 
-Harici bagimlilik yok: GLB zaten JSON + ham tampon, saf Python ile okunur.
-Cikti, PS3 tarafinda dogrudan vertex tamponuna kopyalanabilecek duz bir
-ikili dosyadir (big-endian, PowerPC ile ayni siralama).
+No external dependencies: a GLB is JSON plus raw buffers, read in pure
+Python. The output is a flat binary that the PS3 side can copy straight
+into a vertex buffer (big-endian, the same byte order as the PowerPC).
 
-Bicim:
-    magic   "BWM2"                       4 bayt
-    parca sayisi                         u32
-    her parca icin:
-        ad                               32 bayt (null ile doldurulmus)
-        vertex sayisi                    u32
-        index sayisi                     u32
-        vertexler: x,y,z, nx,ny,nz, r,g,b, metallic  10 x float32
-        indexler:  u16
-        (parca sonu 4 bayta hizalanir)
+Format:
+    magic   "BWM2"                       4 bytes
+    part count                           u32
+    for each part:
+        name                             32 bytes (null padded)
+        vertex count                     u32
+        index count                      u32
+        vertices: x,y,z, nx,ny,nz, r,g,b, metallic  10 x float32
+        indices:  u16
+        (the end of each part is aligned to 4 bytes)
 
-Eksenler: glTF'in kendi konvansiyonu (+Y yukari, -Z ileri) oyunla birebir
-aynidir, bu yuzden ek bir eksen cevirmesi YAPILMAZ. Blender'in Z-yukari
-duzeni zaten kok node'un donusumunde (X ekseninde -90 derece) kodludur.
+Axes: glTF's own convention (+Y up, -Z forward) is exactly the game's, so
+NO extra axis conversion is done. Blender's Z-up layout is already encoded
+in the root node's transform (-90 degrees about X).
 
-Node hiyerarsisi rekursif gezilir ve ebeveyn donusumleri biriktirilir;
-bu model tek kok ("Air Plane") altinda toplandigi icin duz gezmek yanlis
-sonuc veriyordu. --flip burun yonunu ters cevirir.
+The node hierarchy is walked recursively and parent transforms are
+accumulated; this model hangs under a single root ("Air Plane"), so a flat
+walk gave wrong results. --flip reverses the nose direction.
 """
 
 import json
@@ -38,7 +38,7 @@ def read_glb(path):
     data = open(path, 'rb').read()
     magic, ver, _ = struct.unpack('<III', data[:12])
     if magic != 0x46546C67:
-        raise SystemExit('GLB degil: %s' % path)
+        raise SystemExit('not a GLB: %s' % path)
     off = 12
     js = None
     bin_ = b''
@@ -75,9 +75,9 @@ def accessor(js, bin_, index):
 
 
 def node_matrix(node):
-    """Node'un yerel donusum matrisi (4x4, satir oncelikli)."""
+    """Local transform matrix of a node (4x4, row-major)."""
     if 'matrix' in node:
-        m = node['matrix']          # glTF sutun oncelikli
+        m = node['matrix']          # glTF is column-major
         return [[m[0], m[4], m[8], m[12]],
                 [m[1], m[5], m[9], m[13]],
                 [m[2], m[6], m[10], m[14]],
@@ -111,16 +111,17 @@ def mat_mul(a, b):
 
 
 def to_game_axes(v, flip):
-    """glTF ve oyun ayni konvansiyonu kullanir; --flip burnu ters cevirir."""
+    """glTF and the game use the same convention; --flip reverses the nose."""
     x, y, z = v
     return (-x, y, -z) if flip else (x, y, z)
 
 
 def material_metallic(js, index):
-    """Materyalin metaliklik degeri; shader yansimayi buna gore olceklendirir.
+    """Metallic value of a material; the shader scales the reflection by it.
 
-    Govde ve motor kaportasi metalik, lastik ve kaucuk degil. Bu ayrim
-    olmadan tum ucak ayni parlakliga sahip oluyor ve plastik gibi duruyor."""
+    The body and engine cowlings are metallic, tyres and rubber are not.
+    Without this split the whole aircraft has the same sheen and looks
+    like plastic."""
     if index is None:
         return 0.0
 
@@ -132,20 +133,20 @@ def material_metallic(js, index):
     metal = pbr.get('metallicFactor', 0.0)
     rough = pbr.get('roughnessFactor', 0.5)
 
-    # Puruzluluk yansimayi bir miktar kirar ama tamamen yok etmez.
+    # Roughness reduces the reflection somewhat but does not remove it.
     return max(0.0, min(1.0, metal * (1.0 - rough * 0.35)))
 
 
 def material_color(js, index):
-    """glTF materyalinden vertex rengi.
+    """Vertex colour from a glTF material.
 
-    Yalnizca baseColorFactor'a bakmak yetmiyordu: bu modelde isik yayan
-    parcalarin (pencere/farlar) taban rengi [0,0,0] ve renk yalnizca
-    emissiveFactor'da duruyor - o parcalar bu yuzden simsiyah ciziliyordu.
-    Cam materyalinin ise hic degeri yok, varsayilana dusuyor.
+    Looking only at baseColorFactor was not enough: in this model the
+    emissive parts (windows/lights) have a base colour of [0,0,0] and their
+    colour lives only in emissiveFactor - which is why they rendered black.
+    The glass material has no value at all and falls back to the default.
 
-    Metalik yuzeyler biraz aydinlatilir: gercek bir yansima hesabimiz
-    olmadigi icin tamamen mat cikiyorlar. """
+    Metallic surfaces are brightened a little: without a real reflection
+    they came out completely matte. """
     if index is None:
         return (0.8, 0.8, 0.8)
 
@@ -158,15 +159,15 @@ def material_color(js, index):
     if mat.get('name') == 'glass':
         return (0.42, 0.55, 0.68)
 
-    # isik yayan parcalar taban rengin yerine emissive ile cizilir
+    # emissive parts are drawn with the emissive colour instead of the base colour
     for k in range(3):
         if emis[k] > c[k]:
             c[k] = emis[k]
 
-    # metalik yuzeylere hafif bir taban parlaklik
+    # a little base brightness for metallic surfaces
     for k in range(3):
         c[k] = c[k] * (1.0 - 0.35 * metal) + 0.35 * metal * 0.72
-        # tamamen siyah kalan yuzeyler govdeden ayirt edilemiyor
+        # surfaces left pure black cannot be told apart from the body
         if c[k] < 0.05:
             c[k] = 0.05
 
@@ -174,7 +175,7 @@ def material_color(js, index):
 
 
 def walk(js, node_idx, parent, out):
-    """Node agacini gezip her mesh icin birikmis donusumu toplar."""
+    """Walks the node tree and collects the accumulated transform for each mesh."""
     node = js['nodes'][node_idx]
     m = mat_mul(parent, node_matrix(node))
 
@@ -208,9 +209,9 @@ def convert(src, dst, flip=False, scale=1.0):
             color = material_color(js, prim.get('material'))
             metallic = material_metallic(js, prim.get('material'))
 
-            # Vertex renkleri varsa onlar oncelikli: doku bilgisi bunlara
-            # islenmis oluyor (bkz. tools/blender/import_737.py). Alfa
-            # kanali metakligi tasir.
+            # Vertex colours take priority when present: the texture information
+            # is baked into them (see tools/blender/import_737.py). The alpha
+            # channel carries the metallic value.
             vcol = None
             if 'COLOR_0' in attrs:
                 vcol = accessor(js, bin_, attrs['COLOR_0'])
@@ -223,7 +224,7 @@ def convert(src, dst, flip=False, scale=1.0):
                 cr, cg, cb, cm = color[0], color[1], color[2], metallic
                 if vcol is not None and vi < len(vcol):
                     c = vcol[vi]
-                    # unsigned short/byte gelirse 0..1'e olceklenir
+                    # unsigned short/byte values are scaled to 0..1
                     if isinstance(c[0], int):
                         div = 65535.0 if max(c) > 255 else 255.0
                         c = tuple(x / div for x in c)
@@ -242,15 +243,15 @@ def convert(src, dst, flip=False, scale=1.0):
                 idx.extend(range(base, base + len(pos)))
 
         if len(verts) == 0 or len(idx) == 0:
-            continue        # Blender ayirmasindan kalan bos kabuk
+            continue        # empty shell left over from a Blender separation
 
         if len(verts) > 65535:
-            print('  UYARI: %s %d vertex - u16 index sinirini asiyor, atlandi'
+            print('  WARNING: %s %d vertices - exceeds the u16 index limit, skipped'
                   % (name, len(verts)))
             continue
 
         parts.append((name[:31], verts, idx))
-        print('  %-16s vertex=%6d ucgen=%6d'
+        print('  %-16s vertices=%6d triangles=%6d'
               % (name, len(verts), len(idx) // 3))
 
     with open(dst, 'wb') as f:
@@ -263,21 +264,21 @@ def convert(src, dst, flip=False, scale=1.0):
                 f.write(struct.pack('>10f', *v))
             for i in idx:
                 f.write(struct.pack('>H', i))
-            # Sonraki parcanin vertex dizisi 4 bayta hizali baslamali:
-            # PPU hizasiz float okumasinda tuzaga duser.
+            # The next part's vertex array must start 4-byte aligned:
+            # the PPU traps on unaligned float reads.
             pad = (-f.tell()) % 4
             if pad:
                 f.write(b'\0' * pad)
 
     total = sum(len(i) // 3 for _, _, i in parts)
-    print('yazildi: %s  (%d parca, %d ucgen)' % (dst, len(parts), total))
+    print('written: %s  (%d parts, %d triangles)' % (dst, len(parts), total))
     return parts
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
         raise SystemExit(
-            'kullanim: glb_to_mesh.py <girdi.glb> <cikti.msh> [--flip] '
+            'usage: glb_to_mesh.py <input.glb> <output.msh> [--flip] '
             '[--scale N]')
     fl = '--flip' in sys.argv
     sc = 1.0

@@ -1,10 +1,10 @@
 #ifndef GAMEMENU_H
 #define GAMEMENU_H
 
-/* Oyun ici ayar menusu.
+/* In-game settings menu.
  *
- * Durum mantigi donanimdan bagimsizdir (birim testli); cizim ayri bir
- * fonksiyondadir. Menu acikken sahne arkada akmaya devam eder. */
+ * The state logic is hardware independent (unit tested); drawing lives in
+ * a separate function. The scene keeps running behind the open menu. */
 
 typedef enum {
     WEATHER_SUNNY = 0,
@@ -33,7 +33,7 @@ typedef enum {
 
 typedef struct {
     int       open;
-    int       row;          /* secili satir */
+    int       row;          /* selected row */
     Weather   weather;
     TimeOfDay time;
     int       hud_visible;
@@ -43,23 +43,23 @@ typedef struct {
 
 void gamemenu_init(GameMenu *m);
 
-/* Menuyu ac/kapa */
+/* Open/close the menu */
 void gamemenu_toggle(GameMenu *m);
 
-/* dir: -1 yukari, +1 asagi. Menu kapaliyken etkisizdir. */
+/* dir: -1 up, +1 down. No effect while the menu is closed. */
 void gamemenu_move(GameMenu *m, int dir);
 
-/* dir: -1 sol, +1 sag. Secili satirin degerini degistirir; "Cikis"
- * satirinda etkisizdir (orada onay tusu kullanilir). */
+/* dir: -1 left, +1 right. Changes the value of the selected row; no effect
+ * on the "Exit" row (the confirm button is used there). */
 void gamemenu_adjust(GameMenu *m, int dir);
 
-/* Onay tusu: yalnizca "Cikis" satirinda anlamlidir. */
+/* Confirm button: only meaningful on the "Exit" row. */
 void gamemenu_confirm(GameMenu *m);
 
-/* Ekrana cizer (menu kapaliysa hicbir sey yapmaz) */
+/* Draws to the screen (does nothing while the menu is closed) */
 void gamemenu_draw(const GameMenu *m);
 
-/* Gosterim adlari - cizim ve testler ayni metni kullansin diye */
+/* Display names - so drawing and tests use the same text */
 const char *weather_name(Weather w);
 const char *time_name(TimeOfDay t);
 

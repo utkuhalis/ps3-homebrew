@@ -92,7 +92,7 @@ void gamemenu_adjust(GameMenu *m, int dir)
         m->show_profiler = !m->show_profiler;
         break;
     default:
-        break;              /* Cikis satirinda deger yok */
+        break;              /* The Exit row has no value */
     }
 }
 
@@ -122,7 +122,7 @@ void gamemenu_draw(const GameMenu *m)
     if (!m->open)
         return;
 
-    /* yari saydam panel + ince cerceve */
+    /* semi-transparent panel + thin frame */
     overlay_blend_rect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, COL_PANEL, 205);
     overlay_fill_rect(PANEL_X, PANEL_Y, PANEL_W, 2, COL_BORDER);
     overlay_fill_rect(PANEL_X, PANEL_Y + PANEL_H - 2, PANEL_W, 2, COL_BORDER);

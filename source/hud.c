@@ -25,7 +25,7 @@ void hud_update(Hud *h, const Flight *f, float dt)
 {
     (void)dt;
 
-    /* Artik gostermelik degil: degerler dogrudan ucus modelinden geliyor. */
+    /* No longer for show: the values come straight from the flight model. */
     h->speed_kmh = flight_speed_kmh(f);
     h->weight_kg = f->mass_kg;
     h->fuel_pct = flight_fuel_pct(f);
@@ -42,8 +42,8 @@ void hud_draw(const Hud *h, const Camera *cam)
     char buf[32];
     float heading;
 
-    /* Hiz ve yukseklik analog gostergelerde; burada yalnizca onlarda
-     * bulunmayan degerler var. */
+    /* Speed and altitude are on the analogue gauges; only values they do not
+     * show are here. */
     overlay_blend_rect(16, 16, 300, 112, COL_PANEL, 165);
     overlay_fill_rect(16, 16, 300, 1, RGB(150, 158, 170));
 
@@ -60,11 +60,11 @@ void hud_draw(const Hud *h, const Camera *cam)
     row(94, "HEADING", buf, COL_VALUE);
 }
 
-/* Olcum paneli: kare suresinin nereye gittigini bolum bolum gosterir.
+/* Profiler panel: shows section by section where the frame time goes.
  *
- * FLIP buyukse darbogaz GPU'dadir (CPU, RSX'in kareyi bitirmesini bekliyor);
- * digerleri buyukse is CPU tarafindadir. Bu ayrim olmadan neyi
- * iyilestirdigimizi bilemeyiz. */
+ * If FLIP is large the bottleneck is the GPU (the CPU is waiting for RSX
+ * to finish the frame); if the others are large the work is on the CPU.
+ * Without this split we cannot know what we are improving. */
 void hud_draw_profiler(void)
 {
     int x = 940, y = 60, w = 320, h = 190;
@@ -91,7 +91,7 @@ void hud_draw_profiler(void)
         snprintf(buf, sizeof(buf), "%5.2f", us / 1000.0f);
         font_draw_text(x + 70, ry, 1, buf, value);
 
-        /* oransal cubuk: kare suresinin yuzdesi */
+        /* proportional bar: percentage of the frame time */
         bar = (total > 1.0f) ? (int)(us / total * 180.0f) : 0;
         if (bar > 180)
             bar = 180;
@@ -105,9 +105,9 @@ void hud_draw_profiler(void)
     font_draw_text(x + 10, y + h - 20, 1, buf, label);
 }
 
-/* Gaz kolu: yandan gorunen fiziksel bir kol.
+/* Throttle: a physical lever seen from the side.
  *
- * Rakam tek basina yetmiyordu - kolun nerede oldugunu gormek gerekiyor. */
+ * A number alone was not enough - you need to see where the lever is. */
 void hud_draw_throttle_lever(const Flight *f, const Autopilot *ap)
 {
     int x = 26, y = 300, w = 34, h = 190;
@@ -119,10 +119,10 @@ void hud_draw_throttle_lever(const Flight *f, const Autopilot *ap)
     overlay_blend_rect(x - 8, y - 26, w + 78, h + 62, RGB(8, 12, 20), 175);
     font_draw_text(x - 2, y - 22, 1, "THROTTLE", RGB(150, 165, 185));
 
-    /* kizak */
+    /* slot */
     overlay_fill_rect(x + w / 2 - 3, y, 6, h, rail);
 
-    /* kademe cizgileri: %0, 25, 50, 75, 100 */
+    /* detent marks: 0, 25, 50, 75, 100 % */
     {
         int i;
 
@@ -134,12 +134,12 @@ void hud_draw_throttle_lever(const Flight *f, const Autopilot *ap)
         }
     }
 
-    /* dolu kisim: alttan kolun bulundugu yere kadar */
+    /* filled part: from the bottom up to the lever */
     knob_y = y + h - (int)(f->throttle * h);
     overlay_blend_rect(x + w / 2 - 3, knob_y, 6, y + h - knob_y,
                        RGB(90, 200, 120), 220);
 
-    /* kol basi */
+    /* lever knob */
     overlay_fill_rect(x, knob_y - 7, w, 14, RGB(226, 232, 242));
     overlay_fill_rect(x, knob_y - 7, w, 2, frame);
     overlay_fill_rect(x, knob_y + 5, w, 2, RGB(120, 128, 142));
@@ -147,13 +147,13 @@ void hud_draw_throttle_lever(const Flight *f, const Autopilot *ap)
     snprintf(buf, sizeof(buf), "%d%%", (int)(f->throttle * 100.0f + 0.5f));
     font_draw_text(x + w + 10, knob_y - 4, 1, buf, RGB(235, 242, 252));
 
-    /* otopilot gaz kolunu kendisi suruyorsa belirt */
+    /* show when the autopilot is driving the throttle */
     if (ap != NULL && ap->engaged)
         font_draw_text(x - 2, y + h + 12, 1, "AUTOPILOT", RGB(120, 210, 255));
 }
 
-/* Sistem uyarilari: stall, asiri G, yakit.
- * Yanip sonme kare sayacindan gelir; ses tarafi ayni durumu kullanir. */
+/* System warnings: stall, over-G, fuel.
+ * Blinking comes from the frame counter; the audio side uses the same state. */
 void hud_draw_warnings(const Flight *f, unsigned long frame)
 {
     int blink = ((frame / 16) & 1);
@@ -179,8 +179,8 @@ void hud_draw_warnings(const Flight *f, unsigned long frame)
     }
 }
 
-/* Kalkis yapilana kadar ekranin altinda ne yapilacagini gosteren serit.
- * Ucak pistte duruyorken hicbir sey olmamasi kafa karistirici oluyordu. */
+/* Until takeoff, a strip at the bottom of the screen says what to do.
+ * Nothing happening while the aircraft sat on the runway was confusing. */
 void hud_draw_help(const Flight *f)
 {
     int y = 636;
@@ -188,7 +188,7 @@ void hud_draw_help(const Flight *f)
     color_t bg = RGB(8, 12, 20);
 
     if (f->airborne)
-        return;                 /* havalandiktan sonra kaybolur */
+        return;                 /* disappears once airborne */
 
     overlay_blend_rect(330, y, 620, 62, bg, 180);
     overlay_fill_rect(330, y, 620, 1, RGB(150, 158, 170));
@@ -212,7 +212,7 @@ void hud_draw_help(const Flight *f)
     }
 }
 
-/* Ucus yuzeyleri ve motor durumu - kumandanin ne yaptigini gorunur kilar */
+/* Flight surfaces and engine state - makes visible what the controls are doing */
 void hud_draw_controls(const Flight *f)
 {
     char buf[40];
@@ -226,8 +226,8 @@ void hud_draw_controls(const Flight *f)
     font_draw_text(28, y + 14, 2, "THROTTLE", COL_LABEL);
     font_draw_text(184, y + 14, 2, buf, COL_VALUE);
 
-    /* Hedef kademe ile gercek konum farkliysa yuzeyler hareket halindedir;
-     * bunu ok ile gostermek pilota geri bildirim verir. */
+    /* When the target detent and the actual position differ the surfaces are
+     * moving; showing it with an arrow gives the pilot feedback. */
     snprintf(buf, sizeof(buf), "%d%s", (int)(f->flap_target * 3.0f + 0.5f),
              (f->flap < f->flap_target - 0.02f) ? " v" :
              ((f->flap > f->flap_target + 0.02f) ? " ^" : ""));

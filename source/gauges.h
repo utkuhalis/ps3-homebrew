@@ -1,28 +1,28 @@
 #ifndef GAUGES_H
 #define GAUGES_H
 
-/* Analog ucus gostergeleri: hiz, suni ufuk, yukseklik.
+/* Analogue flight instruments: speed, artificial horizon, altitude.
  *
- * Deger -> ibre acisi donusumu saf matematiktir ve ayri fonksiyonlarda
- * durur; boylece cizimden bagimsiz olarak test edilebilir. */
+ * The value -> needle angle conversion is pure maths in separate
+ * functions, so it can be tested independently of drawing. */
 
-/* Deger araliklari (gosterge kadranlarinin kapsadigi degerler) */
+/* Value ranges (the values covered by the dials) */
 #define SPEED_MAX_KMH   400.0f
 #define ALT_MAX_M      4000.0f
 
-/* Ibre acisi (radyan). Saat 6 yonu baslangictir, saat yonunde artar.
- * Deger araligin disindaysa uclara sabitlenir. */
+/* Needle angle (radians). The 6 o'clock position is the start, increasing
+ * clockwise. Values outside the range are pinned to the ends. */
 float gauge_speed_angle(float kmh);
 float gauge_alt_angle(float meters);
 
-/* Gostergeleri ekranin sag altina cizer */
+/* Draws the gauges in the bottom right of the screen */
 void gauges_draw(float speed_kmh, float altitude_m, float pitch_rad,
                  float roll_rad);
 
-/* Suni ufku istenen konumda cizer (onizleme ve test icin acik) */
+/* Draws the artificial horizon at a given position (exposed for preview and tests) */
 void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll);
 
-/* Suni ufuk yardimcilari - saf, birim testli */
+/* Artificial horizon helpers - pure, unit tested */
 float gauge_horizon_dist(float dx, float dy, float roll, float shift);
 float gauge_horizon_shift(float pitch, float r);
 

@@ -1,11 +1,11 @@
 #---------------------------------------------------------------------------------
-# Basic Water - PSL1GHT Makefile (RSX 3D + Cg shader'lari)
-# Docker icindeki ps3dev ortaminda calisir (bkz. build.sh).
+# Basic Water - PSL1GHT Makefile (RSX 3D + Cg shaders)
+# Runs inside the ps3dev Docker environment (see build.sh).
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
 ifeq ($(strip $(PSL1GHT)),)
-$(error "PSL1GHT ortam degiskeni tanimli degil. build.sh ile derleyin.")
+$(error "PSL1GHT is not set. Build with build.sh.")
 endif
 
 include $(PSL1GHT)/ppu_rules
@@ -49,7 +49,7 @@ sFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.S)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
-# Cg shader'lari: .vcg/.fcg -> cgcomp -> .vpo/.fpo -> binary olarak gomulur
+# Cg shaders: .vcg/.fcg -> cgcomp -> .vpo/.fpo -> embedded as binaries
 VCGFILES	:=	$(foreach dir,$(SHADERS),$(notdir $(wildcard $(dir)/*.vcg)))
 FCGFILES	:=	$(foreach dir,$(SHADERS),$(notdir $(wildcard $(dir)/*.fcg)))
 VPOFILES	:=	$(VCGFILES:.vcg=.vpo)
@@ -84,7 +84,7 @@ $(BUILD):
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 clean:
-	@echo temizleniyor ...
+	@echo cleaning ...
 	@rm -fr $(BUILD) $(OUTPUT).elf $(OUTPUT).self $(OUTPUT).fake.self \
 		$(OUTPUT).pkg $(OUTPUT).gnpdrm.pkg $(OUTPUT).elf.map
 

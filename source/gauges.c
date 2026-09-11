@@ -7,7 +7,7 @@
 
 #define PI 3.14159265f
 
-/* Kadran saat 7 yonunden saat 5 yonune, yani 270 derecelik yay cizer */
+/* The dial draws a 270-degree arc from the 7 o'clock to the 5 o'clock position */
 #define SWEEP_START (PI * 0.75f)
 #define SWEEP_TOTAL (PI * 1.5f)
 
@@ -39,7 +39,7 @@ float gauge_alt_angle(float meters)
     return SWEEP_START + t * SWEEP_TOTAL;
 }
 
-/* Kadran govdesi: koyu yuz + metalik cerceve + centikler */
+/* Dial body: dark face + metal bezel + ticks */
 static void draw_dial(float cx, float cy, float r, int ticks)
 {
     int i;
@@ -70,7 +70,7 @@ static void draw_needle(float cx, float cy, float r, float ang)
     overlay_disc(cx, cy, 5.0f, COL_HUB, 245);
 }
 
-/* Gosterge altindaki sayi kutusu */
+/* Number box under the gauge */
 static void draw_value_box(float cx, float cy, const char *value,
                            const char *label)
 {
@@ -84,41 +84,42 @@ static void draw_value_box(float cx, float cy, const char *value,
     font_draw_center((int)cx, y + h + 6, 1, label, COL_LABEL);
 }
 
-/* Bir noktanin ufuk cizgisine gore isaretli uzakligi.
+/* Signed distance of a point from the horizon line.
  *
- * Ufuk, gosterge merkezinden `shift` kadar kaymis ve `roll` kadar donmus bir
- * dogrudur. m = (sin roll, -cos roll) bu dogrunun "yukari" normalidir; roll=0
- * iken m ekranda yukariyi gosterir (ekran y'si asagi pozitif).
+ * The horizon is a line shifted by `shift` from the gauge centre and
+ * rotated by `roll`. m = (sin roll, -cos roll) is its "up" normal; with
+ * roll = 0, m points up on screen (screen y is positive downwards).
  *
- * d > 0  -> gokyuzu tarafi,  d < 0 -> toprak tarafi.
- * Saf fonksiyon: birim testli. */
+ * d > 0 -> sky side,  d < 0 -> ground side.
+ * Pure function: unit tested. */
 float gauge_horizon_dist(float dx, float dy, float roll, float shift)
 {
     return dx * sinf(roll) - dy * cosf(roll) - shift;
 }
 
-/* Burun acisindan ufkun gosterge icindeki kaymasi.
- * Burun yukari (pitch > 0) iken ufuk ekranda ASAGI iner, bu yuzden isaret
- * terstir. Onceki surumde bu isaret ters oldugu icin toprak ustte,
- * gokyuzu altta cikiyordu. */
+/* How far the horizon shifts inside the gauge for a given pitch.
+ * With the nose up (pitch > 0) the horizon moves DOWN on screen, hence the
+ * reversed sign. With this sign wrong in an earlier version, the ground
+ * was on top and the sky at the bottom. */
 float gauge_horizon_shift(float pitch, float r)
 {
     return -clampf(pitch / (PI * 0.5f), -1.0f, 1.0f) * r * 0.9f;
 }
 
-/* Suni ufuk: gokyuzu/toprak ayrimi ucagin yatisina ve burun acisina gore
- * doner ve kayar.
+/* Artificial horizon: the sky/ground split rotates and shifts with the
+ * aircraft's bank and pitch.
  *
- * Dolgu, dondurulmus dikdortgenlerle degil satir taramasiyla ciziliyor:
- * her yatay satir icin once dairenin genisligi, sonra ufkun o satiri nerede
- * kestigi hesaplanip parcalar ayri ayri dolduruluyor. Dondurulmus dikdortgen
- * daire icine kirpilamadigi icin onceki surumde dolgu gostergenin disina
- * tasiyordu; bu yontemde tasma matematiksel olarak imkansiz. */
+ * The fill is drawn by scanlines, not rotated rectangles: for every
+ * horizontal line the circle's width is found first, then where the
+ * horizon crosses that line, and the pieces are filled separately. A
+ * rotated rectangle cannot be clipped to the circle, so in an earlier
+ * version the fill spilled outside the gauge; this way spilling is
+ * mathematically impossible. */
 void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll)
 {
     float shift = gauge_horizon_shift(pitch, r);
     float sa = sinf(roll);
-    float inner = r - 3.0f;         /* cerceve kalinligi kadar iceride */
+    float inner = r - 3.0f;         /* inset by the bezel thickness */
     int i, iy;
 
     for (iy = -(int)inner; iy <= (int)inner; iy++) {
@@ -132,7 +133,7 @@ void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll)
         if (w <= 0)
             continue;
 
-        /* Yatis yokken satirin tamami tek renk: kesisim yok. */
+        /* Without bank the whole row is one colour: no crossing. */
         if (sa > -0.02f && sa < 0.02f) {
             float d = gauge_horizon_dist(0.0f, dy, roll, shift);
 
@@ -140,11 +141,11 @@ void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll)
             continue;
         }
 
-        /* d(x) = (x-cx)*sa - dy*ca - shift = 0  ->  kesisim noktasi */
+        /* d(x) = (x-cx)*sa - dy*ca - shift = 0  ->  crossing point */
         xc = cx + (dy * cosf(roll) + shift) / sa;
 
         if (xc <= (float)xl) {
-            /* satirin tamami kesisimin sagi */
+            /* the whole row is right of the crossing */
             overlay_fill_rect(xl, y, w, 1, sa > 0.0f ? COL_SKY : COL_GROUND);
         } else if (xc >= (float)(xl + w)) {
             overlay_fill_rect(xl, y, w, 1, sa > 0.0f ? COL_GROUND : COL_SKY);
@@ -158,7 +159,7 @@ void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll)
         }
     }
 
-    /* ufuk cizgisi ve derece merdiveni: daire icinde kalacak kadar kisa */
+    /* horizon line and pitch ladder: short enough to stay inside the circle */
     {
         float ca = cosf(roll);
 
@@ -172,16 +173,16 @@ void gauges_draw_attitude(float cx, float cy, float r, float pitch, float roll)
             if (i == 0)
                 continue;
             if (off > inner * 0.8f || off < -inner * 0.8f)
-                continue;       /* gostergenin disina cikacak merdiven cizilmez */
+                continue;       /* ladder rungs that would leave the gauge are not drawn */
             overlay_rot_rect(cx + sa * off, cy - ca * off, len, 1.5f, -roll,
                              COL_TICK, 170);
         }
     }
 
-    /* daire cerceve */
+    /* circular bezel */
     overlay_ring(cx, cy, r, 3.0f, COL_RIM, 235);
 
-    /* sabit ucak sembolu */
+    /* fixed aircraft symbol */
     overlay_fill_rect((int)(cx - 22), (int)(cy - 1), 16, 3, COL_NEEDLE);
     overlay_fill_rect((int)(cx + 6), (int)(cy - 1), 16, 3, COL_NEEDLE);
     overlay_disc(cx, cy, 3.0f, COL_NEEDLE, 250);
@@ -195,18 +196,18 @@ void gauges_draw(float speed_kmh, float altitude_m, float pitch_rad,
     float x1 = 940.0f, x2 = 1080.0f, x3 = 1220.0f;
     char buf[24];
 
-    /* hiz */
+    /* speed */
     draw_dial(x1, y, r, 8);
     draw_needle(x1, y, r, gauge_speed_angle(speed_kmh));
     snprintf(buf, sizeof(buf), "%d", (int)(speed_kmh + 0.5f));
     draw_value_box(x1, y + r + 10.0f, buf, "SPEED km/h");
 
-    /* suni ufuk */
+    /* artificial horizon */
     gauges_draw_attitude(x2, y, r, pitch_rad, roll_rad);
     snprintf(buf, sizeof(buf), "%d", (int)(pitch_rad * 180.0f / PI));
     draw_value_box(x2, y + r + 10.0f, buf, "PITCH");
 
-    /* yukseklik */
+    /* altitude */
     draw_dial(x3, y, r, 8);
     draw_needle(x3, y, r, gauge_alt_angle(altitude_m));
     snprintf(buf, sizeof(buf), "%d", (int)(altitude_m + 0.5f));

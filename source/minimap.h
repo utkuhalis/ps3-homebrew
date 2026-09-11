@@ -4,9 +4,8 @@
 #include "camera.h"
 #include "flight.h"
 
-/* Sol alt kose mini haritasi: rota, ucagin konumu ve yonu, kalan mesafe.
- * Pistler eklendiginde kalkis/inis noktalari gercek koordinatlara baglanacak;
- * su an sabit iki nokta arasindaki rota gosteriliyor. */
+/* Bottom-left mini map: route, aircraft position and heading, remaining
+ * distance. The departure and arrival points are the runway positions. */
 
 void minimap_draw(const Flight *f);
 

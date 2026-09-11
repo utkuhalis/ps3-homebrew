@@ -3,9 +3,9 @@
 
 #include "atmosphere.h"
 
-/* Ekran ustu hava efektleri: yagmur cizgileri ve simsek parlamasi.
- * 2D bindirme katmani uzerine cizilir; atmosferin rain/lightning
- * degerlerine gore siddetlenir. */
+/* On-screen weather effects: rain streaks and lightning flashes.
+ * Drawn on the 2D overlay layer; they grow with the atmosphere's
+ * rain/lightning values. */
 
 void weatherfx_draw(const Atmosphere *atm, float time);
 

@@ -5,12 +5,10 @@
 #include "camera.h"
 #include "flight.h"
 
-/* Ucus gostergeleri.
+/* Flight instruments.
  *
- * Hiz ve yukseklik kameradan gelen GERCEK degerlerdir.
- * Agirlik ve yakit su an gostermeliktir: yakit zamanla azalir, agirlik da
- * yakitla birlikte duser. Ucus modeli eklendiginde bu iki deger gercege
- * baglanacak; HUD arayuzu ayni kalacak. */
+ * All values - speed, altitude, weight and fuel - come from the flight
+ * model; fuel burns over time and the weight drops with it. */
 
 typedef struct {
     float fuel_pct;     /* 0..100 */
@@ -22,24 +20,24 @@ typedef struct {
 
 void hud_init(Hud *h);
 
-/* Degerler artik ucus modelinden gelir: hiz, agirlik ve yakit gercektir. */
+/* The values come from the flight model: speed, weight and fuel are real. */
 void hud_update(Hud *h, const Flight *f, float dt);
 
 void hud_draw(const Hud *h, const Camera *cam);
 
-/* Gaz, flap, spoiler ve inis takimi durumu */
+/* Throttle, flap, spoiler and landing gear state */
 void hud_draw_controls(const Flight *f);
 
-/* Olcum paneli: kare suresi bolum bolum */
+/* Profiler panel: frame time section by section */
 void hud_draw_profiler(void);
 
-/* Gaz kolu (fiziksel kol gorunumu) */
+/* Throttle (physical lever look) */
 void hud_draw_throttle_lever(const Flight *f, const Autopilot *ap);
 
-/* Sistem uyarilari: STALL, OVER G, LOW FUEL */
+/* System warnings: STALL, OVER G, LOW FUEL */
 void hud_draw_warnings(const Flight *f, unsigned long frame);
 
-/* Kalkis yapilana kadar gorunen kumanda yardimi */
+/* Control help shown until takeoff */
 void hud_draw_help(const Flight *f);
 
 #endif

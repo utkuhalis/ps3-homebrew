@@ -1,8 +1,9 @@
-/* Deniz yuzeyi - vertex programi.
+/* Sea surface - vertex program.
  *
- * Dalga formulunun C karsiligi source/waves.c icindedir, BIREBIR ayni
- * tutulmalidir. Yukseklik ve yuzey normali burada hesaplanip fragment'a
- * tasinir; normal dogru olmazsa parlama ve yansima yanlis gorunur. */
+ * The C version of the wave formula is in source/waves.c and must stay
+ * IDENTICAL. Height and surface normal are computed here and passed to the
+ * fragment program; if the normal is wrong, glitter and reflection look
+ * wrong. */
 void main
 (
 	float3 vertexPosition : POSITION,
@@ -23,10 +24,11 @@ void main
 	float3 p = vertexPosition + vertexNormal * 0.0f
 	           + float3(vertexTexcoord, 0.0f) * 0.0f;
 
-	/* Geometride uc buyuk dalga tasinir; kucuk dalgalar izgara
-	 * cozunurlugune sigmadigi icin fragment tarafinda normal olarak eklenir.
-	 * Yonler bilerek birbirine paralel degil ve dalga boylari birbirinin
-	 * tam kati degil; aksi halde desen tekrar edip "kat kat" gorunuyor. */
+	/* The geometry carries three large waves; small waves do not fit the grid
+	 * resolution and are added as normals in the fragment program.
+	 * The directions are deliberately not parallel and the wavelengths are not
+	 * exact multiples of each other; otherwise the pattern repeats and looks
+	 * "layered". */
 	float4 dirX  = float4( 0.98f, -0.42f,  0.55f, 0.0f);
 	float4 dirZ  = float4( 0.17f,  0.91f, -0.83f, 0.0f);
 	float4 len   = float4(163.0f, 89.0f,  47.0f,  1.0f) * waveLength;
@@ -34,13 +36,13 @@ void main
 	float4 speed = float4(  0.85f, 1.21f,  1.63f, 0.0f);
 
 	float4 k = 6.28318531f / len;
-	/* Dalga fazi DUNYA koordinatindan hesaplanir. Duzlem kamerayla birlikte
-	 * kaydigi icin yerel koordinat kullanilirsa desen de kamerayla birlikte
-	 * suruklenir ve deniz sabit durmaz. */
+	/* The wave phase is computed from WORLD coordinates. The plane moves with
+	 * the camera, so with local coordinates the pattern would drift along with
+	 * the camera and the sea would not stand still. */
 	float2 wp = float2(p.x + worldOffset.x, p.z + worldOffset.y);
 
-	/* Dalganin icine dalga: fazi konuma bagli olarak kaydirmak duzenli
-	 * sinus desenini kirar ve deniz dogal gorunur. */
+	/* A wave inside the wave: shifting the phase by position breaks up the
+	 * regular sine pattern and makes the sea look natural. */
 	float warp = sin(wp.x * 0.0071f + timeSec * 0.31f) * 1.7f
 	           + sin(wp.y * 0.0053f - timeSec * 0.23f) * 1.4f;
 

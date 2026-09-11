@@ -3,25 +3,26 @@
 
 #include "mat4.h"
 
-/* Serbest ucus kamerasi. Donanim bagimsiz, birim testli.
- * Girdiler -1..+1 araliginda normalize gelir; bu modul tus eslemesini bilmez. */
+/* Free-flight camera. Hardware independent, unit tested.
+ * Inputs arrive normalised to -1..+1; this module knows nothing about
+ * button mapping. */
 
-#define WATER_LEVEL     0.0f    /* deniz duzlemi y = 0 */
-#define MIN_ALTITUDE    2.0f    /* su yuzeyinin ustunde kalinacak en az mesafe */
-#define MAX_PITCH       1.4835f /* ~85 derece, radyan */
-#define MOVE_SPEED     40.0f    /* birim / saniye */
+#define WATER_LEVEL     0.0f    /* sea plane y = 0 */
+#define MIN_ALTITUDE    2.0f    /* minimum distance to keep above the water */
+#define MAX_PITCH       1.4835f /* ~85 degrees, radians */
+#define MOVE_SPEED     40.0f    /* units / second */
 #define VERT_SPEED     25.0f
-#define LOOK_SPEED      1.8f    /* radyan / saniye */
+#define LOOK_SPEED      1.8f    /* radians / second */
 
 typedef struct {
     float pos[3];
-    float yaw;      /* radyan; 0 = -Z yonune bakar */
-    float pitch;    /* radyan; + yukari */
+    float yaw;      /* radians; 0 = looking towards -Z */
+    float pitch;    /* radians; + is up */
 } Camera;
 
 void camera_init(Camera *c);
 
-/* forward/strafe/updown/yaw_in/pitch_in: -1..+1, dt: saniye */
+/* forward/strafe/updown/yaw_in/pitch_in: -1..+1, dt: seconds */
 void camera_update(Camera *c, float forward, float strafe, float updown,
                    float yaw_in, float pitch_in, float dt);
 

@@ -5,44 +5,44 @@
 #include "mat4.h"
 #include "atmosphere.h"
 
-/* Dunya (sahne) katmani.
+/* World (scene) layer.
  *
- * Oyun tek bir sahneye bagli degil: her dunya kendi init/draw islevini
- * verir, ana dongu yalnizca "o an secili olani" cizer. Boylece yeni bir
- * ortam eklemek mevcut olani hic ellemeden yapilabilir - kotu giderse
- * dunyayi listeden cikarmak yeterli.
+ * The game is not tied to one scene: every world provides its own
+ * init/draw, and the main loop only draws "the one selected now". So a new
+ * environment can be added without touching the existing one - if it goes
+ * badly, removing the world from the list is enough.
  *
- * Ucus modeli, kamera, HUD ve ses dunyadan bagimsizdir; hepsi her sahnede
- * ayni calisir. Dunya yalnizca ORTAMI tanimlar: zemin, gokyuzu, pistler,
- * yapilar. */
+ * The flight model, camera, HUD and audio are independent of the world;
+ * all of them work the same in every scene. A world only defines the
+ * ENVIRONMENT: ground, sky, runways, structures. */
 
 typedef struct {
     const char *name;
 
-    /* Bir kez, program baslarken. 0: basarili */
+    /* Once, at program start. 0: success */
     int  (*init)(void);
 
-    /* Sahneyi cizer (3D gecis). Overlay ayri katmandir. */
+    /* Draws the scene (3D pass). The overlay is a separate layer. */
     void (*draw)(const Camera *cam, const Mat4 *proj, float time_sec,
                  const Atmosphere *atm);
 
-    /* Ucagin baslayacagi pist merkezi, yonu ve pist basina kaydirma */
+    /* Runway centre, heading and threshold offset the aircraft starts from */
     void (*start_point)(float out_xz[2], float *heading, float *offset);
 
-    /* Yer temasinin gecerli oldugu dikdortgen (yari olculer) */
+    /* Rectangle where ground contact applies (half dimensions) */
     void (*ground_extent)(float *half_len, float *half_wid);
 } World;
 
-/* Kayitli dunya sayisi ve erisim */
+/* Number of registered worlds and access */
 int          world_count(void);
 const World *world_get(int index);
 
-/* O an secili dunya */
+/* The currently selected world */
 int          world_current_index(void);
 void         world_select(int index);
 const World *world_current(void);
 
-/* Tum dunyalari baslatir; ilki secili olur. 0: basarili */
+/* Initialises all worlds; the first one is selected. 0: success */
 int          world_init_all(void);
 
 #endif

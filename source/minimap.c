@@ -13,10 +13,10 @@
 #define MAP_H     184
 #define HEAD_H     22
 
-/* Haritanin kapsadigi dunya alani (birim) */
+/* World area covered by the map (units) */
 #define MAP_RANGE  4000.0f
 
-/* Rota uclari: gercek pist konumlari (runway.c'de tanimli) */
+/* Route ends: the actual runway positions (defined in runway.c) */
 #define START_POS RUNWAY_POS[0]
 #define END_POS   RUNWAY_POS[1]
 
@@ -29,7 +29,7 @@
 #define COL_END    RGB(240, 120, 110)
 #define COL_PLANE  RGB(255, 255, 255)
 
-/* Dunya konumunu harita kutusu icindeki piksele cevirir */
+/* Converts a world position to a pixel inside the map box */
 static void world_to_map(float wx, float wz, float *mx, float *my)
 {
     float half = MAP_RANGE * 0.5f;
@@ -52,7 +52,7 @@ void minimap_draw(const Flight *f)
     char buf[32];
     int i, steps;
 
-    /* kutu ve baslik seridi */
+    /* box and title strip */
     overlay_blend_rect(MAP_X, MAP_Y, MAP_W, MAP_H, COL_BG, 200);
     overlay_blend_rect(MAP_X, MAP_Y, MAP_W, HEAD_H, COL_HEAD, 225);
     overlay_fill_rect(MAP_X, MAP_Y, MAP_W, 1, COL_EDGE);
@@ -66,7 +66,7 @@ void minimap_draw(const Flight *f)
     world_to_map(END_POS[0], END_POS[1], &ex, &ey);
     world_to_map(f->pos[0], f->pos[2], &px, &py);
 
-    /* rota: kisa parcalarla cizilen kesikli cizgi */
+    /* route: dashed line drawn in short segments */
     dx = ex - sx;
     dy = ey - sy;
     len = sqrtf(dx * dx + dy * dy);
@@ -80,34 +80,34 @@ void minimap_draw(const Flight *f)
                               (int)(sy + dy * t - 1.5f), 3, 3, COL_ROUTE);
     }
 
-    /* uclar */
+    /* ends */
     overlay_disc(sx, sy, 4.5f, COL_START, 240);
     overlay_disc(ex, ey, 4.5f, COL_END, 240);
 
-    /* Ucak isareti: UCAGIN burun yonunu gosterir.
+    /* Aircraft marker: shows the AIRCRAFT's nose direction.
      *
-     * Onceden KAMERANIN yaw'i kullaniliyordu; yorunge kamerasiyla ucagin
-     * cevresinde donunce harita oku da donuyor ve ucak yan gidiyormus gibi
-     * gorunuyordu.
+     * It used to use the CAMERA's yaw; orbiting the camera around the
+     * aircraft turned the map arrow too, and the aircraft looked as if it was
+     * flying sideways.
      *
-     * Dunya -> harita: X saga, Z asagi. Burun yonu dunyada
-     * (sin yaw, -cos yaw), haritada da ayni bilesenler; ekran acisi
-     * atan2(dy, dx) ile bulunur. */
+     * World -> map: X right, Z down. The nose direction is (sin yaw, -cos yaw)
+     * in the world and has the same components on the map; the screen angle
+     * comes from atan2(dy, dx). */
     {
         float hx = sinf(f->yaw);
         float hy = -cosf(f->yaw);
 
         ang = atan2f(hy, hx);
 
-        /* govde: burun yonunde uzun cubuk, ucta kucuk bir burun isareti */
+        /* fuselage: a long bar along the nose, a small nose mark at the tip */
         overlay_rot_rect(px, py, 15.0f, 3.0f, ang, COL_PLANE, 250);
         overlay_rot_rect(px + hx * 7.0f, py + hy * 7.0f, 5.0f, 5.0f,
                          ang, COL_PLANE, 250);
-        /* kanatlar: burun yonune dik */
+        /* wings: perpendicular to the nose */
         overlay_rot_rect(px, py, 11.0f, 2.5f, ang + 1.5708f, COL_PLANE, 220);
     }
 
-    /* kalan mesafe */
+    /* remaining distance */
     dx = END_POS[0] - f->pos[0];
     dy = END_POS[1] - f->pos[2];
     snprintf(buf, sizeof(buf), "%d units", (int)sqrtf(dx * dx + dy * dy));

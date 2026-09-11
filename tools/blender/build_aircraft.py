@@ -1,19 +1,19 @@
-"""Temiz bir is jeti modeli uretir - parcali, UV'li, PS3'e uygun.
+"""Builds a clean business jet model - in parts, with UVs, suitable for the PS3.
 
     Blender --background --python tools/blender/build_aircraft.py
 
-Neden kendi modelimizi uretiyoruz: hazir CC0 uclaklarda kumanda yuzeyleri
-govdeye kaynak geliyor, UV'ler otomatik silindirik acilim oldugu icin livery
-boyanamiyor ve govde iclerinde kapatilmamis yuzeyler kaliyor (motor icinin
-gorunmesi bundandi). Burada her parca kendi nesnesi olarak DOGAR, UV'ler
-duzlemsel/silindirik olarak bilincli acilir, ve hicbir yuzey ic tarafa
-bakmaz.
+Why we build our own model: in ready-made CC0 aircraft the control surfaces
+come welded to the body, the UVs are automatic cylindrical unwraps so no
+livery can be painted, and open faces are left inside the body (that is
+why the inside of the engines showed). Here every part is BORN as its own
+object, UVs are unwrapped deliberately as planar/cylindrical, and no face
+points inwards.
 
-Model OYUN eksenlerinde uretilir (+X sag, +Y yukari, -Z burun); disa
-aktarmadan hemen once X ekseninde +90 derece dondurulur, cunku Blender
-Z-yukari calisir ve glTF disa aktarici Blender eksenlerini bekler. Bu adim
-atlandiginda uzunluk ile yukseklik yer degistiriyor.
-Olculer metre; toplam uzunluk ~14 m, kanat acikligi ~13 m.
+The model is built in GAME axes (+X right, +Y up, -Z nose); right before
+export it is rotated +90 degrees about X, because Blender works Z-up and
+the glTF exporter expects Blender axes. When that step was skipped,
+length and height swapped.
+Units are metres; overall length ~14 m, span ~13 m.
 """
 
 import bpy
@@ -26,43 +26,43 @@ from mathutils import Vector
 DST = os.path.join(os.path.dirname(__file__), '..', '..',
                    'assets', 'model', 'jet.glb')
 
-# --- ana olculer (metre) ---
-FUS_LEN      = 14.0     # govde uzunlugu
-FUS_R        = 0.95     # govde yaricapi
+# --- main dimensions (metres) ---
+FUS_LEN      = 14.0     # fuselage length
+FUS_R        = 0.95     # fuselage radius
 NOSE_LEN     = 2.6
 TAIL_LEN     = 4.2
 
-WING_SPAN    = 6.3      # kok merkezinden uc noktaya
-WING_ROOT    = 2.9      # kok kiris
-WING_TIP     = 1.15     # uc kiris
-WING_SWEEP   = 1.9      # uc, koke gore ne kadar geride
-WING_DIHED   = 0.30     # uc, koke gore ne kadar yukarida
-WING_THICK   = 0.16     # kirise oranla kalinlik
-WING_Z       = 1.2      # kanadin govde uzerindeki konumu (+ arkaya)
-WING_Y       = -0.35    # alcak kanat
+WING_SPAN    = 6.3      # from the root centre to the tip
+WING_ROOT    = 2.9      # root chord
+WING_TIP     = 1.15     # tip chord
+WING_SWEEP   = 1.9      # how far the tip sits behind the root
+WING_DIHED   = 0.30     # how far the tip sits above the root
+WING_THICK   = 0.16     # thickness relative to chord
+WING_Z       = 1.2      # position of the wing along the fuselage (+ is aft)
+WING_Y       = -0.35    # low wing
 
-CTRL_CHORD   = 0.26     # arka kenarin ne kadari kumanda yuzeyi
-FLAP_SPAN    = (0.18, 0.62)     # kok orani araligi
+CTRL_CHORD   = 0.26     # how much of the trailing edge is control surface
+FLAP_SPAN    = (0.18, 0.62)     # span fraction range
 AIL_SPAN     = (0.66, 0.96)
 
-HT_SPAN      = 2.5      # yatay stabilizator
+HT_SPAN      = 2.5      # horizontal stabiliser
 HT_ROOT      = 1.35
 HT_TIP       = 0.75
 HT_SWEEP     = 0.55
-VT_HEIGHT    = 2.9      # dikey stabilizator
+VT_HEIGHT    = 2.9      # vertical stabiliser
 VT_ROOT      = 2.2
 VT_TIP       = 1.15
 VT_SWEEP     = 1.5
 
 ENG_LEN      = 2.4
 ENG_R        = 0.62
-ENG_X        = 1.42     # govdeye daha yakin
+ENG_X        = 1.42     # closer to the fuselage
 ENG_Y        = 0.35
 ENG_Z        = 2.9
 
-GEAR_R       = 0.38     # tekerlek yaricapi
+GEAR_R       = 0.38     # wheel radius
 GEAR_W       = 0.26
-STRUT_R      = 0.13     # bacak yaricapi (0.10 iken cizgi gibi kaliyordu)
+STRUT_R      = 0.13     # strut radius (at 0.10 it looked like a line)
 
 
 def clear():
@@ -87,9 +87,9 @@ def finish(ob, bm, smooth=True):
 
 
 def airfoil(t, chord, thick):
-    """Basit simetrik kesit: ust ve alt yuzey icin y sapmasi.
-    t: 0 (on kenar) .. 1 (arka kenar) """
-    # NACA benzeri: kalinlik on kenarda hizli artar, arkaya dogru incelir
+    """Simple symmetric section: y offset for the upper and lower surface.
+    t: 0 (leading edge) .. 1 (trailing edge) """
+    # NACA-like: thickness rises fast at the leading edge and thins towards the back
     y = 5.0 * thick * chord * (0.2969 * math.sqrt(max(t, 0.0))
                                - 0.1260 * t
                                - 0.3516 * t * t
@@ -99,17 +99,17 @@ def airfoil(t, chord, thick):
 
 
 def make_wing_panel(name, side, t0, t1, with_thickness=True):
-    """Kanadin [t0,t1] acikliginda bir dilimi. side: +1 sag, -1 sol.
+    """A slice of the wing over the span [t0,t1]. side: +1 right, -1 left.
 
-    Kumanda yuzeyleri de ayni fonksiyondan cikar; boylece arka kenar
-    kesiti govdeyle birebir ortusur ve arada bosluk kalmaz. """
+    The control surfaces come out of the same function, so the trailing
+    edge section matches the wing exactly and no gap is left. """
     ob, bm = new_mesh(name)
 
-    STEPS = 10          # kiris boyunca ornek sayisi
-    segs = 6            # aciklik boyunca
+    STEPS = 10          # samples along the chord
+    segs = 6            # along the span
 
     def station(s):
-        """Aciklik orani s icin kok/uc arasi degerler."""
+        """Root/tip interpolated values for span fraction s."""
         chord = WING_ROOT + (WING_TIP - WING_ROOT) * s
         x = side * WING_SPAN * s
         z = WING_Z + WING_SWEEP * s
@@ -137,14 +137,14 @@ def make_wing_panel(name, side, t0, t1, with_thickness=True):
 
     for i in range(segs):
         for j in range(STEPS):
-            # ust yuzey (disa bakan normal icin sira onemli)
+            # upper surface (the order matters for outward-facing normals)
             bm.faces.new((verts_top[i][j], verts_top[i + 1][j],
                           verts_top[i + 1][j + 1], verts_top[i][j + 1]))
-            # alt yuzey
+            # lower surface
             bm.faces.new((verts_bot[i][j], verts_bot[i][j + 1],
                           verts_bot[i + 1][j + 1], verts_bot[i + 1][j]))
 
-    # kok ve uc kapaklari: ic yuzey birakmamak icin
+    # root and tip caps: so no inner faces are left
     for row_t, row_b, flip in ((verts_top[0], verts_bot[0], False),
                                (verts_top[-1], verts_bot[-1], True)):
         for j in range(STEPS):
@@ -155,14 +155,14 @@ def make_wing_panel(name, side, t0, t1, with_thickness=True):
 
 
 def make_fuselage(name):
-    """Govde: burun konik, orta silindirik, kuyruk yukari kalkan koni."""
+    """Fuselage: conical nose, cylindrical middle, upswept conical tail."""
     ob, bm = new_mesh(name)
 
     RINGS = 22
     SIDES = 16
 
     def profile(u):
-        """u: 0 burun .. 1 kuyruk. (yaricap, y kaymasi) doner."""
+        """u: 0 nose .. 1 tail. Returns (radius, y offset)."""
         nose_end = NOSE_LEN / FUS_LEN
         tail_start = 1.0 - TAIL_LEN / FUS_LEN
 
@@ -173,7 +173,7 @@ def make_fuselage(name):
         elif u > tail_start:
             k = (u - tail_start) / (1.0 - tail_start)
             r = FUS_R * (1.0 - k) ** 0.75
-            dy = 0.55 * k * k          # kuyruk yukari kalkar
+            dy = 0.55 * k * k          # the tail sweeps up
         else:
             r = FUS_R
             dy = 0.0
@@ -200,7 +200,7 @@ def make_fuselage(name):
             bm.faces.new((rings[i][j], rings[i][k],
                           rings[i + 1][k], rings[i + 1][j]))
 
-    # burun ve kuyruk kapaklari (ic bosluk kalmasin)
+    # nose and tail caps (no hollow inside)
     nose_c = bm.verts.new((0.0, 0.0, -FUS_LEN * 0.5 - 0.15))
     tail_c = bm.verts.new((0.0, 0.55, FUS_LEN * 0.5 + 0.05))
     for j in range(SIDES):
@@ -212,7 +212,7 @@ def make_fuselage(name):
 
 
 def make_tube(name, cx, cy, cz, radius, length, sides=14, closed=True):
-    """Kapali silindir (motor govdesi, takim bacagi, tekerlek)."""
+    """Closed cylinder (engine nacelle, gear strut, wheel)."""
     ob, bm = new_mesh(name)
 
     front = []
@@ -243,7 +243,7 @@ def make_tube(name, cx, cy, cz, radius, length, sides=14, closed=True):
 
 
 def make_wheel(name, cx, cy, cz):
-    """Tekerlek: X ekseni etrafinda donecek sekilde yatik silindir."""
+    """Wheel: a cylinder lying on its side so it spins about X."""
     ob, bm = new_mesh(name)
     sides = 16
 
@@ -272,7 +272,7 @@ def make_wheel(name, cx, cy, cz):
 
 
 def make_stab(name, span, root, tip, sweep, z0, vertical=False):
-    """Yatay veya dikey stabilizator (kumanda yuzeyi ayri uretilir)."""
+    """Horizontal or vertical stabiliser (the control surface is built separately)."""
     ob, bm = new_mesh(name)
     segs = 4
     STEPS = 6
@@ -316,7 +316,7 @@ def make_stab(name, span, root, tip, sweep, z0, vertical=False):
 
 
 def mirror(ob, name):
-    """X ekseninde aynala (sol kanat, sol motor...)."""
+    """Mirror across X (left wing, left engine...)."""
     new = ob.copy()
     new.data = ob.data.copy()
     new.name = name
@@ -325,7 +325,7 @@ def mirror(ob, name):
     bpy.context.view_layer.objects.active = new
     new.select_set(True)
     bpy.ops.object.transform_apply(scale=True)
-    # aynalama yuz sirasini ters cevirir; normalleri geri duzelt
+    # mirroring reverses the face order; fix the normals back
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.flip_normals()
@@ -335,10 +335,10 @@ def mirror(ob, name):
 
 
 def unwrap_all():
-    """Her nesneyi kendi UV alanina acar.
+    """Unwraps each object into its own UV space.
 
-    Smart project, ada baslarina bosluk birakerek acar; livery boyamak icin
-    yeterli, doku tekrari icin de kullanilabilir. """
+    Smart project leaves margins around the islands; good enough for
+    painting a livery and usable for repeating textures too. """
     for ob in bpy.data.objects:
         if ob.type != 'MESH':
             continue
@@ -371,7 +371,7 @@ def main():
     body = make_fuselage('body')
     add_material(body, 'skin', (0.86, 0.87, 0.89))
 
-    # --- kanatlar: sabit kisim + flap + aileron ayri ---
+    # --- wings: fixed part + flap + aileron as separate parts ---
     for side, tag in ((1.0, 'right'), (-1.0, 'left')):
         main_panel = make_wing_panel('wing_%s' % tag, side, 0.06, 1.0)
         add_material(main_panel, 'skin', (0.86, 0.87, 0.89))
@@ -384,18 +384,18 @@ def main():
                               AIL_SPAN[0], AIL_SPAN[1])
         add_material(ail, 'control', (0.78, 0.79, 0.82))
 
-        # kumanda yuzeylerini arka kenara tasi ve kirisini kisalt
+        # move the control surfaces to the trailing edge and shorten their chord
         for ob, span in ((flap, FLAP_SPAN), (ail, AIL_SPAN)):
             for v in ob.data.vertices:
                 s = abs(v.co.x) / WING_SPAN
                 chord = WING_ROOT + (WING_TIP - WING_ROOT) * s
                 z_le = WING_Z + WING_SWEEP * s - chord * 0.5
                 t = (v.co.z - z_le) / chord
-                # yalnizca arka %CTRL_CHORD'luk dilim kalsin
+                # keep only the rear CTRL_CHORD slice
                 v.co.z = z_le + chord * (1.0 - CTRL_CHORD
                                          + CTRL_CHORD * max(t, 0.0))
 
-        # spoiler: kanat ustunde, flap'in onunde ince panel
+        # spoiler: thin panel on top of the wing, ahead of the flap
         sp = make_wing_panel('spoiler_%s' % tag, side, 0.24, 0.56,
                              with_thickness=False)
         for v in sp.data.vertices:
@@ -406,12 +406,12 @@ def main():
             v.co.y += 0.10
         add_material(sp, 'control', (0.72, 0.73, 0.76))
 
-        # motor: kapali silindir + fan diski (ic yuzey yok)
+        # engine: closed cylinder + fan disc (no inner faces)
         eng = make_tube('engine_%s' % tag, side * ENG_X, ENG_Y, ENG_Z,
                         ENG_R, ENG_LEN)
         add_material(eng, 'engine', (0.42, 0.44, 0.47), metallic=0.8)
 
-        # pilon: motoru govdeye baglar, motor havada asili durmasin
+        # pylon: ties the engine to the body so it does not float
         pylon = make_tube('pylon_%s' % tag, side * (ENG_X * 0.55), ENG_Y,
                           ENG_Z, 0.16, ENG_LEN * 0.7, sides=6)
         add_material(pylon, 'skin', (0.86, 0.87, 0.89))
@@ -420,7 +420,7 @@ def main():
                         ENG_Z - ENG_LEN * 0.48, ENG_R * 0.86, 0.06)
         add_material(fan, 'dark', (0.05, 0.05, 0.06), metallic=0.3)
 
-        # ana inis takimi
+        # main landing gear
         strut = make_tube('gear_%s' % tag, side * 1.15, -1.05, WING_Z + 0.2,
                           STRUT_R, 1.6, sides=10)
         add_material(strut, 'metal', (0.35, 0.36, 0.38), metallic=0.9)
@@ -428,7 +428,7 @@ def main():
         wheel = make_wheel('wheel_%s' % tag, side * 1.15, -1.85, WING_Z + 0.2)
         add_material(wheel, 'tyre', (0.06, 0.06, 0.07), metallic=0.0, rough=0.9)
 
-    # --- kuyruk ---
+    # --- tail ---
     ht = make_stab('stabilizer_right', HT_SPAN, HT_ROOT, HT_TIP, HT_SWEEP,
                    FUS_LEN * 0.5 - 1.0)
     add_material(ht, 'skin', (0.86, 0.87, 0.89))
@@ -449,16 +449,16 @@ def main():
                     FUS_LEN * 0.5 - 1.6 + VT_ROOT * 0.34, vertical=True)
     add_material(rud, 'control', (0.24, 0.38, 0.66))
 
-    # burun takimi
+    # nose gear
     ns = make_tube('gear_front', 0.0, -0.95, -FUS_LEN * 0.5 + 2.2,
                    STRUT_R * 0.8, 1.5, sides=10)
     add_material(ns, 'metal', (0.35, 0.36, 0.38), metallic=0.9)
     nw = make_wheel('wheel_front', 0.0, -1.62, -FUS_LEN * 0.5 + 2.2)
     add_material(nw, 'tyre', (0.06, 0.06, 0.07), metallic=0.0, rough=0.9)
 
-    # Normalleri disa bakacak sekilde yeniden hesapla.
-    # Yuz siralarini elle tutturmaya calismak kirilgandi: govde ustten
-    # karanlik goruluyordu cunku bazi yuzlerin normali iceri bakiyordu.
+    # Recompute the normals so they face outwards.
+    # Trying to keep face orders right by hand was fragile: the fuselage
+    # looked dark from above because some faces had inward normals.
     for ob in bpy.data.objects:
         if ob.type != 'MESH':
             continue
@@ -481,9 +481,9 @@ def main():
         n = sum(len(p.vertices) - 2 for p in ob.data.polygons)
         tris += n
         print('  %-20s %6d ucgen' % (ob.name, n))
-    print('  toplam %d ucgen' % tris)
+    print('  %d triangles total' % tris)
 
-    # Oyun eksenlerinden Blender eksenlerine: (x, y, z) -> (x, -z, y)
+    # From game axes to Blender axes: (x, y, z) -> (x, -z, y)
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.transform.rotate(value=math.radians(90.0), orient_axis='X',
                              orient_type='GLOBAL')

@@ -31,7 +31,7 @@ void waypoint_project(const Mat4 *vp, const Camera *cam, const float world[3],
     out->behind = (clip[3] <= 0.001f);
 
     if (out->behind) {
-        /* Arkadaysa yansitma anlamsiz; yalnizca yon bilgisi uretilir. */
+        /* Projecting a point behind the camera is meaningless; only the direction is produced. */
         float rel = atan2f(dx, -dz) - cam->yaw;
 
         while (rel < -3.14159265f) rel += 6.28318531f;
@@ -57,8 +57,8 @@ void waypoint_project(const Mat4 *vp, const Camera *cam, const float world[3],
 
         if (out->sx < MARGIN)          out->sx = MARGIN;
         if (out->sx > OVL_W - MARGIN)  out->sx = OVL_W - MARGIN;
-        /* Kenar oklari HUD panellerinin uzerine binmesin: alt serit
-         * gostergelere, en ust serit gorev listesine ayrilmistir. */
+        /* Edge arrows must not overlap the HUD panels: the bottom strip is
+         * reserved for the gauges, the top strip for the objective list. */
         if (out->sy < EDGE_TOP)     out->sy = EDGE_TOP;
         if (out->sy > EDGE_BOTTOM)  out->sy = EDGE_BOTTOM;
     } else {
@@ -71,7 +71,7 @@ static void draw_marker(const WaypointView *w, const char *name)
     char buf[32];
 
     if (w->on_screen) {
-        /* hedef gorus alaninda: halka + ince artı + etiket */
+        /* target in view: ring + thin cross + label */
         overlay_ring(w->sx, w->sy, 20.0f, 2.5f, COL_MARK, 235);
         overlay_fill_rect((int)(w->sx - 1), (int)(w->sy - 28), 2, 10, COL_MARK);
         overlay_fill_rect((int)(w->sx - 1), (int)(w->sy + 18), 2, 10, COL_MARK);
@@ -82,7 +82,7 @@ static void draw_marker(const WaypointView *w, const char *name)
         snprintf(buf, sizeof(buf), "%d", (int)w->distance);
         font_draw_center((int)w->sx, (int)(w->sy + 44), 1, buf, COL_TEXT);
     } else {
-        /* ekran disinda: kenarda ok */
+        /* off screen: arrow at the edge */
         overlay_rot_rect(w->sx, w->sy, 24.0f, 5.0f, w->edge_angle, COL_EDGE, 235);
         overlay_rot_rect(w->sx - cosf(w->edge_angle) * 9.0f,
                          w->sy - sinf(w->edge_angle) * 9.0f,
@@ -102,7 +102,7 @@ void waypoint_draw_all(const Camera *cam, const Mat4 *proj)
         WaypointView wv;
 
         world[0] = RUNWAY_POS[i][0];
-        world[1] = RUNWAY_DECK_Y + 30.0f;   /* pistin biraz uzerinde */
+        world[1] = RUNWAY_DECK_Y + 30.0f;   /* a little above the runway */
         world[2] = RUNWAY_POS[i][1];
 
         waypoint_project(&vp, cam, world, &wv);

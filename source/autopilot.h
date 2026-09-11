@@ -3,38 +3,39 @@
 
 #include "flight.h"
 
-/* Otopilot: irtifa, yon ve hiz tutar.
+/* Autopilot: holds altitude, heading and speed.
  *
- * Donanim bagimsiz ve saftir (birim testli). Ucaga dogrudan dokunmaz;
- * kumanda girdisi uretir - tipki oyuncunun yaptigi gibi. Boylece ucus
- * modeli tek yerden calisir ve otopilot da ayni fizige tabidir. */
+ * Hardware independent and pure (unit tested). It never touches the
+ * aircraft directly; it produces control inputs, just like the player.
+ * That way the flight model runs from one place and the autopilot obeys
+ * the same physics. */
 
-#define AP_MAX_BANK_RAD    0.42f    /* ~24 derece, yolcu ucagi konforu */
+#define AP_MAX_BANK_RAD    0.42f    /* ~24 degrees, airliner comfort */
 #define AP_MAX_PITCH_RAD   0.22f
-#define AP_VS_LIMIT_MS      8.0f    /* hedef tirmanma/alcalma hizi siniri */
+#define AP_VS_LIMIT_MS      8.0f    /* limit on target climb/descent rate */
 
 typedef struct {
     int   engaged;
-    float target_alt;       /* metre */
-    float target_heading;   /* radyan */
+    float target_alt;       /* metres */
+    float target_heading;   /* radians */
     float target_speed;     /* m/s */
 } Autopilot;
 
 void autopilot_init(Autopilot *ap);
 
-/* Devreye alir: o anki irtifa, yon ve hizi hedef olarak kilitler. */
+/* Engages: locks the current altitude, heading and speed as targets. */
 void autopilot_engage(Autopilot *ap, const Flight *f);
 void autopilot_disengage(Autopilot *ap);
 void autopilot_toggle(Autopilot *ap, const Flight *f);
 
-/* Hedefleri elle kaydirir (menu ya da tuslarla) */
+/* Nudges the targets by hand (menu or buttons) */
 void autopilot_adjust_alt(Autopilot *ap, float delta);
 void autopilot_adjust_heading(Autopilot *ap, float delta);
 
-/* Kumanda girdilerini uretir. engaged degilse ucaga dokunmaz. */
+/* Produces control inputs. Does not touch the aircraft unless engaged. */
 void autopilot_update(const Autopilot *ap, Flight *f, float dt);
 
-/* -pi..pi araligina indirger (yon farki hesabinda kullanilir) */
+/* Wraps to -pi..pi (used for heading differences) */
 float autopilot_wrap_angle(float a);
 
 #endif

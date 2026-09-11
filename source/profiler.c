@@ -4,13 +4,13 @@
 
 #include "profiler.h"
 
-/* Ortalama penceresi: 60 kare = 1 saniye. Daha kisa tutmak sayilari
- * okunamayacak kadar oynatiyor. */
+/* Averaging window: 60 frames = 1 second. Shorter makes the numbers jump
+ * too much to read. */
 #define WINDOW 60
 
 static s64   start_us[PROF_COUNT];
-static float accum_us[PROF_COUNT];      /* pencere icinde toplam */
-static float avg_us[PROF_COUNT];        /* son tamamlanan pencere ortalamasi */
+static float accum_us[PROF_COUNT];      /* sum within the window */
+static float avg_us[PROF_COUNT];        /* average of the last completed window */
 
 static s64   frame_start_us;
 static float frame_accum_us;

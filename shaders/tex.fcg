@@ -1,17 +1,17 @@
-/* Zemin yuzeyleri - fragment programi.
+/* Ground surfaces - fragment program.
  *
- * Yuzey dokusu DOKUDAN degil, burada hesaplanarak uretilir. Sebebi pratik:
- * RSX'te doku ornekleme calistirilamadi (veri dogru, UV dogru, sampler
- * talimati mikrokodda var, ama tex2D siyah donuyor), ve zaten gokyuzu ile
- * su da ayni sekilde hesapla uretiliyor. Boylece pist de sahnenin geri
- * kalaniyla ayni yolu izliyor.
+ * The surface pattern is computed here, not sampled from a TEXTURE. The
+ * reason is practical: texture sampling could not be made to work on RSX
+ * (the data is right, the UVs are right, the sampler instruction is in
+ * the microcode, and tex2D still returns black), and the sky and water
+ * are computed the same way anyway, so the runway follows the same path
+ * as the rest of the scene.
  *
- * Desen, dusuk fragment hassasiyetine dayanikli olacak sekilde ic ice
- * kucuk katsayili sinuslerden kuruluyor: buyuk carpanlar (frac(sin(x)*43758))
- * RSX'te eziliyor ve duz renge donuyor.
- */
+ * The pattern is built from nested small-coefficient sines so it survives
+ * the low fragment precision: large multipliers (frac(sin(x)*43758)) get
+ * crushed on RSX and turn into a flat colour. */
 
-/* Farkli olceklerde bant gurultusu; -1..1 arasi doner */
+/* Band noise at several scales; returns -1..1 */
 float noise2(float2 p)
 {
 	float a = sin(p.x * 1.7f) * sin(p.y * 2.3f);
@@ -26,7 +26,7 @@ void main
 	float4 color    : TEXCOORD0,
 	float4 worldPos : TEXCOORD1,
 	float2 uv       : TEXCOORD2,
-	float4 surfIn   : TEXCOORD3,   /* x: yuzey tipi */
+	float4 surfIn   : TEXCOORD3,   /* x: surface type */
 
 	uniform sampler2D surfaceMap,
 	uniform float4 eyePosition,
@@ -39,19 +39,19 @@ void main
 	float3 col = color.rgb;
 	float kind = surfIn.x;
 
-	/* --- asfalt: ince agrega + boyuna derzler + hafif lekelenme --- */
+	/* --- asphalt: fine aggregate + lengthwise joints + light staining --- */
 	if (kind > 0.5f && kind < 1.5f) {
 		float grain = noise2(uv * 9.0f) * 0.055f;
 		float patch = noise2(uv * 0.7f) * 0.045f;
 
-		/* dokuma derzleri: pist boyunca duzenli araliklarla koyu cizgi */
+		/* paving joints: dark lines at regular intervals along the runway */
 		float seam = smoothstep(0.46f, 0.5f, abs(frac(uv.y * 0.5f) - 0.5f));
 
 		col *= (1.0f + grain + patch);
 		col -= seam * 0.035f;
 	}
 
-	/* --- cim: benekli, yer yer kurumus --- */
+	/* --- grass: mottled, dry in patches --- */
 	if (kind > 1.5f && kind < 2.5f) {
 		float blade = noise2(uv * 14.0f) * 0.10f;
 		float dry = noise2(uv * 1.1f + 4.0f);
@@ -60,7 +60,7 @@ void main
 		col = lerp(col, float3(0.46f, 0.44f, 0.26f), saturate(dry * 0.35f));
 	}
 
-	/* --- beton: genis plakalar, aralarinda derz --- */
+	/* --- concrete: large slabs with joints between them --- */
 	if (kind > 2.5f) {
 		float wear = noise2(uv * 2.6f) * 0.05f;
 		float jx = smoothstep(0.47f, 0.5f, abs(frac(uv.x * 0.25f) - 0.5f));

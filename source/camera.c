@@ -4,7 +4,7 @@
 
 void camera_init(Camera *c)
 {
-    /* kalkis pistinin biraz uzerinde ve gerisinde basla */
+    /* start a little above and behind the departure runway */
     vec3_set(c->pos, -1500.0f, 60.0f, 1600.0f);
     c->yaw = 0.0f;
     c->pitch = 0.0f;
@@ -31,7 +31,7 @@ void camera_update(Camera *c, float forward, float strafe, float updown,
 {
     float fwd[3], right[3];
 
-    /* bakis */
+    /* look */
     c->yaw += yaw_in * LOOK_SPEED * dt;
     c->pitch += pitch_in * LOOK_SPEED * dt;
 
@@ -40,13 +40,13 @@ void camera_update(Camera *c, float forward, float strafe, float updown,
     else if (c->pitch < -MAX_PITCH)
         c->pitch = -MAX_PITCH;
 
-    /* yaw'i -pi..pi araliginda tut (uzun ucuslarda hassasiyet kaybini onler) */
+    /* keep yaw in -pi..pi (avoids precision loss on long flights) */
     while (c->yaw > 3.14159265f)
         c->yaw -= 6.28318531f;
     while (c->yaw < -3.14159265f)
         c->yaw += 6.28318531f;
 
-    /* hareket */
+    /* movement */
     camera_forward(c, fwd);
     camera_right(c, right);
 
@@ -54,7 +54,7 @@ void camera_update(Camera *c, float forward, float strafe, float updown,
     vec3_add_scaled(c->pos, right, strafe * MOVE_SPEED * dt);
     c->pos[1] += updown * VERT_SPEED * dt;
 
-    /* su yuzeyi carpismasi: asla suyun altina inilemez */
+    /* water surface collision: never below the water */
     if (c->pos[1] < WATER_LEVEL + MIN_ALTITUDE)
         c->pos[1] = WATER_LEVEL + MIN_ALTITUDE;
 }

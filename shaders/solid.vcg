@@ -1,11 +1,11 @@
-/* Duz renkli 3D nesneler (pistler, platformlar) - vertex programi.
- * Renk vertex ozniteliginde tasinir, boylece tek shader ile farkli
- * renkteki parcalar tek cizimde gonderilebilir. */
+/* Flat-coloured 3D objects (runways, platforms) - vertex program.
+ * Colour travels in a vertex attribute, so parts of different colours can
+ * be sent in a single draw with one shader. */
 void main
 (
 	float3 vertexPosition : POSITION,
-	float3 vertexNormal   : NORMAL,     /* renk */
-	float2 vertexTexcoord : TEXCOORD0,  /* x: parlaklik carpani */
+	float3 vertexNormal   : NORMAL,     /* colour */
+	float2 vertexTexcoord : TEXCOORD0,  /* x: brightness multiplier */
 
 	uniform float4x4 mvpMatrix,
 

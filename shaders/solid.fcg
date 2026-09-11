@@ -1,5 +1,5 @@
-/* Duz renkli 3D nesneler - fragment programi.
- * Mesafeyle ufuk rengine karisir; boylece pistler sahnenin sisine uyar. */
+/* Flat-coloured 3D objects - fragment program.
+ * Fades to the horizon colour with distance so the runways sit in the fog. */
 void main
 (
 	float4 color    : TEXCOORD0,

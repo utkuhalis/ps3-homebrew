@@ -1,9 +1,9 @@
 #ifndef OVERLAY_H
 #define OVERLAY_H
 
-/* 3D sahnenin uzerine 2D cizim (HUD, menu).
- * Koordinatlar sanal 1280x720 sistemindedir; modul gercek cozunurluge
- * olceklendirir. Renkler 0xRRGGBB. */
+/* 2D drawing over the 3D scene (HUD, menu).
+ * Coordinates are in a virtual 1280x720 space; the module scales to the
+ * real resolution. Colours are 0xRRGGBB. */
 
 typedef unsigned int color_t;
 
@@ -12,33 +12,33 @@ typedef unsigned int color_t;
 
 #define RGB(r, g, b) (((color_t)(r) << 16) | ((color_t)(g) << 8) | (color_t)(b))
 
-/* Bir kez, program baslarken */
+/* Once, at program start */
 int  overlay_init(void);
 
-/* Kare basi: toplanan dikdortgenleri sifirlar */
+/* Start of frame: clears the collected primitives */
 void overlay_begin(void);
 
-/* Toplanan tum dikdortgenleri tek cizim cagrisinda GPU'ya gonderir.
- * 3D sahne cizildikten sonra, kare sonunda cagrilir. */
+/* Sends everything collected to the GPU in one draw call.
+ * Called at the end of the frame, after the 3D scene. */
 void overlay_flush(void);
 
-/* O karede toplanan dikdortgen sayisi (olcum icin) */
+/* Number of primitives collected this frame (for the profiler) */
 unsigned int overlay_rect_count(void);
 
-/* Kare icinde cizim tamponu doldu mu (tani icin) */
+/* Did the draw buffer fill up this frame (diagnostics) */
 int  overlay_overflowed(void);
 
 void overlay_fill_rect(int x, int y, int w, int h, color_t c);
 
-/* alpha: 0..255, arka planla harmanlar (yari saydam paneller icin) */
+/* alpha: 0..255, blends with the background (semi-transparent panels) */
 void overlay_blend_rect(int x, int y, int w, int h, color_t c, int alpha);
 
-/* Kenarlari merkezden disa dogru sonen yumusak leke (yagmur damlasi gibi).
- * Ayni dikdortgen verisi kullanilir; yumusatma fragment tarafinda yapilir. */
+/* Soft blob fading outwards from the centre (like a raindrop).
+ * Uses the same rectangle data; the softening happens in the fragment program. */
 void overlay_soft_blob(int x, int y, int w, int h, color_t c, int alpha);
 
-/* Merkez etrafinda dondurulmus dikdortgen (ibreler, kadran centikleri).
- * cx, cy merkez; w, h tam genislik/yukseklik; angle radyan. */
+/* Rectangle rotated about its centre (needles, dial ticks).
+ * cx, cy centre; w, h full width/height; angle in radians. */
 void overlay_rot_rect(float cx, float cy, float w, float h, float angle,
                       color_t c, int alpha);
 
@@ -55,7 +55,7 @@ typedef struct {
 void overlay_tris(const OvlPoint *p, int np, const unsigned short *idx, int ni,
                   color_t c, int alpha);
 
-/* Halka (gosterge cercevesi) ve dolu daire */
+/* Ring (gauge bezel) and filled disc */
 void overlay_ring(float cx, float cy, float radius, float thickness,
                   color_t c, int alpha);
 void overlay_disc(float cx, float cy, float radius, color_t c, int alpha);

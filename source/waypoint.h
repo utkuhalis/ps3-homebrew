@@ -4,25 +4,25 @@
 #include "camera.h"
 #include "mat4.h"
 
-/* Ekranda hedef noktalarini gosteren isaretler.
+/* Markers that show target points on screen.
  *
- * Dunya konumu goruntu-projeksiyon matrisiyle ekran koordinatina cevrilir.
- * Hedef ekranin disinda kaliyorsa isaret kenara sabitlenir ve bir ok yonu
- * gosterir; boylece oyuncu nereye donecegini bilir. */
+ * The world position goes through the view-projection matrix to screen
+ * coordinates. If the target is off screen the marker is pinned to the
+ * edge and shows an arrow, so the player knows which way to turn. */
 
 typedef struct {
-    float sx, sy;       /* ekran konumu (sanal 1280x720) */
-    float distance;     /* kameradan uzaklik */
-    int   on_screen;    /* 1: hedef gorus alaninda */
-    int   behind;       /* 1: hedef kameranin arkasinda */
-    float edge_angle;   /* ekran disindaysa ok yonu (radyan) */
+    float sx, sy;       /* screen position (virtual 1280x720) */
+    float distance;     /* distance from the camera */
+    int   on_screen;    /* 1: target in view */
+    int   behind;       /* 1: target behind the camera */
+    float edge_angle;   /* arrow direction when off screen (radians) */
 } WaypointView;
 
-/* Dunya noktasini ekran bilgisine cevirir. vp: proj * view */
+/* Converts a world point to screen information. vp: proj * view */
 void waypoint_project(const Mat4 *vp, const Camera *cam, const float world[3],
                       WaypointView *out);
 
-/* Tum pist hedeflerini cizer */
+/* Draws all runway targets */
 void waypoint_draw_all(const Camera *cam, const Mat4 *proj);
 
 #endif

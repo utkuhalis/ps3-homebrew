@@ -1,18 +1,18 @@
-/* Ucak govdesi - vertex programi.
+/* Aircraft body - vertex program.
  *
- * Aydinlatma burada yapilir, fragment tarafinda degil. Once fragment'ta
- * yapiliyordu ve govde simsiyah ciziliyordu: olculdugunde renk varyani
- * fragment programina yalnizca hicbir hesap yokken ulasiyordu
- * (oColor = float4(color.rgb, 1) -> 218), programa herhangi bir carpim
- * eklenir eklenmez sifira dusuyordu (-> 4). Calisan solid.fcg iki varyanla
- * (renk + dunya konumu) hesap yapabiliyor; ucusan shader ucuncu varyani
- * (normal) ekledigi anda bozuluyordu. Bu yuzden normal fragment'a hic
- * gecmez, isik burada cozulur. */
+ * Lighting happens here, not in the fragment program. It used to be done
+ * per fragment and the body rendered pure black: measured, the colour
+ * varying reached the fragment program only while it did no arithmetic
+ * (oColor = float4(color.rgb, 1) -> 218) and dropped to zero as soon as any
+ * multiply was added (-> 4). solid.fcg computes fine with two varyings
+ * (colour + world position); this shader broke the moment it added a third
+ * (the normal). So the normal never crosses into the fragment stage and
+ * the light is solved here. See issue #10. */
 void main
 (
 	float3 vertexPosition : POSITION,
 	float3 vertexNormal   : NORMAL,
-	float4 vertexColor    : TEXCOORD0,  /* rgb + metaliklik */
+	float4 vertexColor    : TEXCOORD0,  /* rgb + metallic */
 
 	uniform float4x4 mvpMatrix,
 	uniform float4 eyePosition,
@@ -34,13 +34,13 @@ void main
 	float sky_up = saturate(n.y * 0.5f + 0.5f);
 	float3 tint = lerp(horizonCol.xyz, zenithCol.xyz, sky_up);
 
-	/* Ortam isigi gokyuzu tonundan pay alir ama beyaz govde beyaz kalsin
-	 * diye baskin olmaz. */
+	/* Ambient light takes a share of the sky tint, but not enough to stop a
+	 * white body from looking white. */
 	float3 amb = lerp(float3(0.66f, 0.66f, 0.67f), tint * 0.85f, 0.18f);
 	float3 col = vertexColor.xyz * (amb + sunColor.xyz * ndl * 1.05f);
 
-	/* Yansima: cevre olarak ufuk-zenit gecisi alinir, yansiyan yonun
-	 * yuksekligine gore. Siyirarak bakilan yerlerde ayna etkisi artar. */
+	/* Reflection: the environment is the horizon-to-zenith gradient, picked by
+	 * the height of the reflected direction. Grazing angles mirror more. */
 	float3 refl = lerp(horizonCol.xyz, zenithCol.xyz,
 	                   saturate((n.y - v.y) * 0.5f + 0.5f));
 	float fres = saturate(1.0f + dot(v, n));
@@ -49,7 +49,7 @@ void main
 	col = lerp(col, refl * lerp(vertexColor.xyz, float3(1, 1, 1), 0.50f),
 	           mirror);
 
-	/* Gunes parlamasi */
+	/* Sun highlight */
 	{
 		float nh = saturate(dot(n, normalize(sunDir.xyz - v)));
 		float g = nh * nh; g = g * g; g = g * g;   /* nh^8 */

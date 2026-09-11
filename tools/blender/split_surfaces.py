@@ -1,19 +1,19 @@
-"""plane.glb icindeki kumanda yuzeylerini ayri nesnelere boler.
+"""Splits the control surfaces in plane.glb into separate objects.
 
-Headless Blender ile calisir; BlenderMCP eklentisine gerek yoktur:
+Runs in headless Blender; no BlenderMCP add-on needed:
 
     Blender --background --python tools/blender/split_surfaces.py
 
-Model tek bir govde mesh'i olarak geldigi icin flap, aileron, spoiler,
-elevator ve rudder geometrik olarak secilir: her yuzun merkezi, o yuzeyin
-bulunmasi gereken bolgeye dusuyorsa secilir ve mesh'ten ayrilir.
+The model arrives as a single fuselage mesh, so flaps, ailerons, spoilers,
+elevator and rudder are selected geometrically: a face is selected and
+separated if its centre falls in the region where that surface belongs.
 
-Blender eksenleri (import sonrasi, Z-yukari):
-    -Y burun,  +Y kuyruk,  X kanat acikligi,  Z yukari
-Olculer tools/blender ile yapilan bolge analizinden alindi:
-    kanat duzlemi     Z ~ -1.5,  Y 0.0 .. 4.15  (arka kenar ~4.1)
-    kanat ucu         |X| ~ 9.8
-    dikey kuyruk      Y 7.7 .. 10.9,  Z 0.8 .. 3.2
+Blender axes (after import, Z up):
+    -Y nose,  +Y tail,  X span,  Z up
+Measurements come from a region analysis done in Blender:
+    wing plane        Z ~ -1.5,  Y 0.0 .. 4.15  (trailing edge ~4.1)
+    wing tip          |X| ~ 9.8
+    vertical tail     Y 7.7 .. 10.9,  Z 0.8 .. 3.2
 """
 
 import bpy
@@ -28,22 +28,22 @@ DST = os.path.join(os.path.dirname(__file__), '..', '..',
 
 BODY = 'Air Plane'
 
-# Kanat supurulmus: arka kenarin Y'si acikliga gore kayiyor. Olcum:
+# The wing is swept: the trailing edge Y shifts with span. Measured:
 #   |X|=4 -> Y=2.41 ,  |X|=9 -> Y=4.12   =>  Y_te = 0.342*|X| + 1.04
 def wing_trailing_y(x):
     return 0.342 * abs(x) + 1.04
 
 
-# Kanat arka kenari: kanat kirisinin son diliminde kalan yuzler
+# Wing trailing edge: faces in the last slice of the wing chord
 WING_Z = (-2.35, -0.85)
-TRAIL_Y = (3.55, 4.40)          # arka kenar seridi
-SPOIL_Y = (2.70, 3.55)          # arka kenarin hemen onu (ust yuzey)
+TRAIL_Y = (3.55, 4.40)          # trailing edge strip
+SPOIL_Y = (2.70, 3.55)          # just ahead of the trailing edge (upper surface)
 
 def bisect_wing(obj, sign, offset):
-    """Kanadi supurmeye uyan egik bir duzlemle keser.
+    """Cuts the wing with a slanted plane that follows the sweep.
 
-    Kanat panelleri az poligonlu oldugu icin arka kenarda ayrilacak hazir yuz
-    yok; once duzlemle kesip yeni kenar olusturmak gerekiyor. Duzlem:
+    The wing panels are low-poly, so there are no ready-made faces at the
+    trailing edge to separate; a new edge has to be cut with a plane first:
         Y - 0.342*sign*X = 1.04 - offset
     """
     import mathutils
@@ -61,7 +61,7 @@ def bisect_wing(obj, sign, offset):
     no_world = mathutils.Vector((-0.342 * sign, 1.0, 0.0)).normalized()
     co_world = mathutils.Vector((0.0, 1.04 - offset, 0.0))
 
-    # Yalnizca ilgili kanattaki geometri kesilir
+    # Only the geometry of the relevant wing is cut
     geom = []
     for f in bm.faces:
         c = mw @ f.calc_center_median()
@@ -84,7 +84,7 @@ def bisect_wing(obj, sign, offset):
 
 
 REGIONS = [
-    # (ad, test fonksiyonu)
+    # (name, test function)
     ('flap_left',     lambda c, n: (-5.80 < c.x < -2.20 and
                                     c.y > wing_trailing_y(c.x) - 0.55 and
                                     c.y < 6.0 and
@@ -99,7 +99,7 @@ REGIONS = [
     ('aileron_right', lambda c, n: (c.x > 5.80 and
                                     c.y > wing_trailing_y(c.x) - 0.55 and
                                     WING_Z[0] < c.z < WING_Z[1])),
-    # Dikey kuyrugun arka kenari
+    # Trailing edge of the vertical tail
     ('rudder',        lambda c, n: (abs(c.x) < 0.65 and
                                     c.y > 10.10 and c.z > 0.85)),
 ]
@@ -112,7 +112,7 @@ def load():
 
 
 def split(obj, name, test):
-    """test'e uyan yuzleri ayri bir nesneye ayirir; sayiyi doner."""
+    """Separates the faces that pass test into a new object; returns the count."""
     mw = obj.matrix_world
     nw = mw.to_3x3()
 
@@ -150,23 +150,23 @@ def split(obj, name, test):
     return n
 
 
-WHEEL_MATERIALS = ('Material.005', 'Material.006')   # lastik ve jant
+WHEEL_MATERIALS = ('Material.005', 'Material.006')   # tyre and rim
 
 
 def split_wheels():
-    """Tekerlek gobegini suspansiyon bacagindan ayirir.
+    """Separates the wheel hub from the suspension strut.
 
-    Lastik ve jant kendi materyallerini kullaniyor, bacak baskasini; ayirmadan
-    tekerlegi dondurmek bacagi da dondururdu.
+    Tyre and rim use their own materials, the strut another; without
+    separating them, spinning the wheel would spin the strut too.
 
-    Kaynak nesneler ISIMLE degil, ICERIKLE bulunur: nesne adlari ice aktarma
-    ve onceki ayirmalar sirasinda kayiyor, sabit isme guvenmek kirilgandi.
-    Olcut: tekerlek materyali iceren ve govde disinda kalan nesneler; sag/sol/
-    burun ayrimi bounding box merkezinden gelir. """
+    Source objects are found by CONTENT, not by NAME: object names shift
+    during import and earlier separations, and relying on fixed names was
+    fragile. Criterion: objects that contain the wheel material and lie
+    outside the fuselage; left/right/nose comes from the bounding box centre. """
     from mathutils import Vector
 
-    # Hedefler ONCE belirlenir: ayirma sirasinda bpy.data.objects degisiyor
-    # ve isimler kayiyor, uzerinde gezerken islem yapmak guvenli degil.
+    # Targets are decided FIRST: bpy.data.objects changes during separation
+    # and names shift, so operating while iterating over it is not safe.
     targets = []
     for o in list(bpy.data.objects):
         if o.type != 'MESH' or o.name == BODY:
@@ -189,8 +189,8 @@ def split_wheels():
         wheel_idx = set(i for i, m in enumerate(o.data.materials)
                         if m is not None and m.name in WHEEL_MATERIALS)
 
-        # Secimi temizlemeden EDIT moduna girmek tehlikeli: mesh.separate
-        # SECILI TUM nesnelerde calisiyor ve govdeyi de parcaliyordu.
+        # Entering EDIT mode without clearing the selection is dangerous: mesh.separate
+        # works on ALL selected objects and was shredding the fuselage too.
         bpy.ops.object.select_all(action='DESELECT')
         o.select_set(True)
         bpy.context.view_layer.objects.active = o
@@ -209,9 +209,9 @@ def split_wheels():
             bpy.ops.object.mode_set(mode='OBJECT')
             continue
 
-        # Yeni nesne ISIMLE degil REFERANSLA bulunur: isim kaymasi
-        # yanlis nesneyi yeniden adlandiriyordu (govde 'wheel_front'
-        # olarak isaretlenmisti).
+        # The new object is found by REFERENCE, not by NAME: a shifted name
+        # renamed the wrong object (the fuselage had been marked 'wheel_front'
+        # at one point).
         before = set(bpy.data.objects.values())
         bpy.ops.mesh.separate(type='SELECTED')
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -220,23 +220,23 @@ def split_wheels():
         src_name = o.name
         if fresh:
             fresh[0].name = name
-            print('  %-14s -> %-13s %5d yuz (merkez X %.2f)'
+            print('  %-14s -> %-13s %5d faces (centre X %.2f)'
                   % (src_name, name, n, cx))
 
 
 def main():
     body = load()
 
-    # Once kanatlari arka kenar cizgisinden kes, sonra parcalari ayir
-    print('\n=== TEKERLEKLER AYRILIYOR ===')
+    # Cut the wings along the trailing edge line first, then separate the parts
+    print('\n=== SEPARATING WHEELS ===')
     split_wheels()
 
-    print('\n=== KANATLAR KESILIYOR ===')
+    print('\n=== CUTTING WINGS ===')
     bisect_wing(body, -1.0, 0.55)
     bisect_wing(body,  1.0, 0.55)
-    print('  kesim tamam, yuz sayisi %d' % len(body.data.polygons))
+    print('  cut done, %d faces' % len(body.data.polygons))
 
-    print('\n=== KUMANDA YUZEYLERI AYRILIYOR ===')
+    print('\n=== SEPARATING CONTROL SURFACES ===')
 
     for name, test in REGIONS:
         n = split(body, name, test)
@@ -248,7 +248,7 @@ def main():
         if o.type == 'MESH':
             print('  %-16s %6d yuz' % (o.name, len(o.data.polygons)))
             total += len(o.data.polygons)
-    print('  toplam %d yuz' % total)
+    print('  %d faces total' % total)
 
     bpy.ops.export_scene.gltf(filepath=os.path.abspath(DST),
                               export_format='GLB',

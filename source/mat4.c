@@ -70,7 +70,7 @@ Mat4 mat4_look_at(const float eye[3], const float target[3], const float up[3])
     Mat4 r;
     float zax[3], xax[3], yax[3];
 
-    /* z ekseni kameranin ARKASINA bakar (OpenGL konvansiyonu) */
+    /* the z axis points BEHIND the camera (OpenGL convention) */
     vec3_sub(zax, eye, target);
     vec3_normalize(zax);
 

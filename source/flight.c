@@ -4,25 +4,25 @@
 #include "flight.h"
 
 #define AIR_DENSITY      1.225f
-#define CL_SLOPE         5.2f    /* hucum acisi basina tasima katsayisi */
-#define CL_FLAP          0.85f   /* tam flap'in ekledigi tasima */
+#define CL_SLOPE         5.2f    /* lift coefficient per radian of angle of attack */
+#define CL_FLAP          0.85f   /* lift added by full flaps */
 #define CD_BASE          0.028f
 #define CD_INDUCED       0.055f
 #define CD_FLAP          0.10f
 #define CD_SPOILER       0.16f
-#define SPOILER_LIFT_LOSS 0.55f  /* tam spoiler tasimanin bu oranini kirar */
+#define SPOILER_LIFT_LOSS 0.55f  /* full spoilers remove this fraction of lift */
 
-/* Tam girdide donme hizlari (radyan/saniye). Ilk degerler (1.25 / 2.10)
- * saniyede 71 ve 120 derece ediyordu; ucak ucaktan cok oyuncak gibi
- * donuyordu. Bir is jeti icin 30-50 derece/saniye gercekci. */
+/* Rotation rates at full input (radians/second). The first values
+ * (1.25 / 2.10) were 71 and 120 degrees per second; the aircraft turned
+ * like a toy. 30-50 degrees per second is realistic for a jet. */
 #define PITCH_RATE       0.34f
 #define ROLL_RATE        0.85f
 #define YAW_RATE         0.26f
 
-/* Statik kararlilik: burun kendiliginden hava akisi yonune doner.
- * Gercek ucagi "kendi ucan" bir sey yapan sey budur. */
+/* Static stability: the nose turns into the airflow by itself.
+ * This is what makes a real aircraft "fly itself". */
 #define PITCH_STABILITY  0.85f
-#define FUEL_BURN_KGS    2.20f   /* 737 tam gazda ~2.2 kg/s */
+#define FUEL_BURN_KGS    2.20f   /* 737 at full power ~2.2 kg/s */
 
 static float clampf(float v, float lo, float hi)
 {
@@ -34,7 +34,7 @@ static float len3(const float v[3])
     return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
-/* Burun yonu (yaw/pitch'ten). Roll burun yonunu degistirmez. */
+/* Nose direction (from yaw/pitch). Roll does not change the nose direction. */
 static void forward_vec(const Flight *f, float out[3])
 {
     float cp = cosf(f->pitch);
@@ -44,9 +44,9 @@ static void forward_vec(const Flight *f, float out[3])
     out[2] = -cp * cosf(f->yaw);
 }
 
-/* Yukari yon: govde (0,1,0) ekseninin dunyadaki karsiligi.
- * Yonelim matrisinden turetilir; boylece tasima yonu ile modelin gorsel
- * yatisi hicbir zaman ayrisamaz. */
+/* Up direction: the body's (0,1,0) axis in the world.
+ * Derived from the attitude matrix, so the lift direction and the model's
+ * visible bank can never disagree. */
 static void up_vec(const Flight *f, float out[3])
 {
     float m[3][3];
@@ -59,8 +59,9 @@ static void up_vec(const Flight *f, float out[3])
 
 void flight_orientation_matrix(const Flight *f, float m[3][3]);
 
-/* Tasima katsayisi: hucum acisiyla dogrusal artar, stall acisindan sonra
- * hizla coker. Flap hem katsayiyi hem kritik aciyi artirir. */
+/* Lift coefficient: grows linearly with angle of attack and collapses
+ * quickly past the stall angle. Flaps raise both the coefficient and the
+ * critical angle. */
 static float lift_coefficient(float aoa, float flap)
 {
     float stall = STALL_ANGLE_RAD + flap * 0.06f;
@@ -68,9 +69,9 @@ static float lift_coefficient(float aoa, float flap)
     float mag = aoa < 0.0f ? -aoa : aoa;
     float over;
 
-    /* Kanat her iki yonde de stall eder. Onceden yalnizca pozitif taraf
-     * sinirlaniyordu; burun asagi dalista hucum acisi -1.3 radyana kadar
-     * gidip tasima katsayisi -6'ya ciktigi icin ucak yanlara firliyordu. */
+    /* The wing stalls in both directions. Only the positive side used to be
+     * limited; in a nose-down dive the angle of attack went to -1.3 rad, the
+     * lift coefficient reached -6, and the aircraft was flung sideways. */
     if (mag <= stall)
         return cl;
 
@@ -79,7 +80,7 @@ static float lift_coefficient(float aoa, float flap)
         over = 1.0f;
     cl *= (1.0f - 0.85f * over);
 
-    /* Cok buyuk acilarda kanat artik kanat degildir: tasima sifira gider. */
+    /* At very large angles a wing is no longer a wing: lift goes to zero. */
     if (mag > 1.05f) {
         float fade = (1.57f - mag) / 0.52f;
 
@@ -117,13 +118,14 @@ float flight_drag_force_full(float airspeed, float aoa, float flap,
     return cd * q;
 }
 
-/* Govde koordinatini dunyaya tasir: once roll (Z), sonra pitch (X),
- * sonra yaw (Y).
+/* Moves a body coordinate into the world: roll (Z) first, then pitch (X),
+ * then yaw (Y).
  *
- * Yaw, burun yonuyle ayni konvansiyonda olmali: yerel -Z ekseni dunyada
- * (sin yaw, 0, -cos yaw) yonune gider - forward_vec ile birebir ayni.
- * X bileseni ters yazildigi icin ucak modeli, ucagin gercekte gittigi
- * yonden farkli bir yone bakiyordu ve pistte yamuk duruyordu. */
+ * Yaw must follow the same convention as the nose direction: local -Z
+ * maps to (sin yaw, 0, -cos yaw) in the world - exactly like forward_vec.
+ * With the X component written backwards the model faced a different way
+ * from where the aircraft was actually going, and sat crooked on the
+ * runway. */
 void flight_body_to_world(const Flight *f, const float in[3], float out[3])
 {
     float cr = cosf(f->roll),  sr = sinf(f->roll);
@@ -131,9 +133,10 @@ void flight_body_to_world(const Flight *f, const float in[3], float out[3])
     float cy = cosf(f->yaw),   sy = sinf(f->yaw);
     float x1, y1, z1, x2, y2, z2;
 
-    /* Pozitif roll SAGA yatistir: sag kanat asagi iner. Ilk yazimda isaret
-     * tersti; model sola yatarken fizik (yaw += sin(roll)) saga donduruyordu,
-     * yani kumanda gorsel olarak ters calisiyordu. */
+    /* Positive roll is a bank to the RIGHT: the right wing goes down. The sign
+     * was reversed in the first version; the model banked left while the
+     * physics (yaw += sin(roll)) turned right, so the controls looked
+     * inverted. */
     x1 = in[0] * cr + in[1] * sr;
     y1 = -in[0] * sr + in[1] * cr;
     z1 = in[2];
@@ -147,12 +150,12 @@ void flight_body_to_world(const Flight *f, const float in[3], float out[3])
     out[2] = f->pos[2] + (x2 * sy + z2 * cy);
 }
 
-/* Yonelim matrisi (3x3, satir oncelikli): flight_body_to_world'un oteleme
- * disindaki kismi. Cok vertexli model cizerken trigonometriyi vertex basina
- * degil kare basina bir kez hesaplamak icin ayrildi.
+/* Attitude matrix (3x3, row-major): flight_body_to_world without the
+ * translation. Split out so that drawing a model with many vertices
+ * computes the trigonometry once per frame, not once per vertex.
  *
- * Katsayilar flight_body_to_world acilarak turetildi; test bu ikisinin
- * birebir ayni sonucu verdigini dogrular. */
+ * The coefficients were derived by expanding flight_body_to_world; a test
+ * checks that both give exactly the same result. */
 void flight_orientation_matrix(const Flight *f, float m[3][3])
 {
     float cr = cosf(f->roll),  sr = sinf(f->roll);
@@ -172,16 +175,17 @@ void flight_orientation_matrix(const Flight *f, float m[3][3])
     m[2][2] =  cp * cy;
 }
 
-/* Ucak pist dikdortgeninin uzerinde mi?
+/* Is the aircraft over the runway rectangle?
  *
- * dx,dz pist merkezine gore dunya farki. Once pist yonune gore dondurulup
- * uzunluk/genislik eksenlerine ayristirilir. Saf fonksiyon: birim testli. */
+ * dx, dz are the world offset from the runway centre. They are rotated by
+ * the runway heading first and split into length and width axes. Pure
+ * function: unit tested. */
 int flight_over_runway(const Flight *f, float dx, float dz)
 {
     float ch = cosf(f->ground_heading);
     float sh = sinf(f->ground_heading);
 
-    /* pist ekseni boyunca (burun yonu) ve enine bilesenler */
+    /* components along the runway axis (nose direction) and across it */
     float along = dx * sh - dz * ch;
     float across = dx * ch + dz * sh;
 
@@ -196,20 +200,20 @@ void flight_init_on_runway(Flight *f, const float runway_xz[2], float heading,
 {
     memset(f, 0, sizeof(*f));
 
-    /* Pistin BASINDA, tekerlekler uzerinde, duruyor. Onceden pist merkezine
-     * konuyordu ve kalkis kosusuna yalnizca yarim pist kaliyordu. */
+    /* At the START of the runway, standing on its wheels. It used to be placed
+     * at the runway centre, leaving only half the runway for the takeoff run. */
     f->pos[0] = runway_xz[0] - sinf(heading) * start_offset;
     f->pos[1] = DECK_Y + GEAR_HEIGHT;
     f->pos[2] = runway_xz[1] + cosf(heading) * start_offset;
 
     f->yaw = heading;
-    f->throttle = 0.0f;         /* motor rolantide, kalkisi oyuncu yapar */
+    f->throttle = 0.0f;         /* engine at idle; the player makes the takeoff */
     f->fuel_kg = FUEL_FULL_KG;
     f->mass_kg = EMPTY_MASS_KG + FUEL_FULL_KG;
 
     f->gear_down = 1;
     f->gear_pos = 1.0f;
-    f->flap = 0.34f;            /* kalkis icin bir kademe flap */
+    f->flap = 0.34f;            /* one notch of flap for takeoff */
     f->flap_target = 0.34f;
     f->on_ground = 1;
     f->airborne = 0;
@@ -238,11 +242,11 @@ void flight_init(Flight *f, const float start_pos[3], float start_yaw)
     f->gear_pos = 0.0f;
     f->airborne = 1;
 
-    /* havada baslar: burun yonunde bir miktar hiz */
+    /* starts in the air: some speed along the nose */
     {
         float fwd[3];
         forward_vec(f, fwd);
-        /* 737 seyir hizina yakin baslangic; 70 m/s bu govde icin stall alti */
+        /* start near 737 cruise speed; 70 m/s is below the stall for this airframe */
         f->vel[0] = fwd[0] * 190.0f;
         f->vel[1] = fwd[1] * 190.0f;
         f->vel[2] = fwd[2] * 190.0f;
@@ -262,15 +266,16 @@ void flight_update(Flight *f, float dt)
 
     speed_for_turn = len3(f->vel);
 
-    /* --- kumanda girdileri yonelimi degistirir ---
+    /* --- control inputs change the attitude ---
      *
-     * Girdi dogrudan aciyi degil, hedef ACISAL HIZI belirler; gercek acisal
-     * hiz hedefe atalet zaman sabitiyle yaklasir. Boylece ucagin kutlesi
-     * hissedilir: kumanda aninda karsilik vermez, birakildiginda donme
-     * hemen kesilmez.
+     * The input sets a target ANGULAR RATE, not the angle; the actual rate
+     * approaches the target with an inertia time constant. That is what makes
+     * the aircraft feel heavy: it does not respond instantly, and it does not
+     * stop rotating the moment the input is released.
      *
-     * Etkinlik ayrica dinamik basincla (hizin karesiyle) olceklenir: yerde
-     * duran ucak kumandaya tepki vermez, yavas ucusta kumandalar agirdir. */
+     * Authority also scales with dynamic pressure (speed squared): an aircraft
+     * standing on the ground does not respond, and controls are heavy in slow
+     * flight. */
     {
         float v = len3(f->vel);
         float q = (v * v) / (CONTROL_REF_MS * CONTROL_REF_MS);
@@ -290,15 +295,14 @@ void flight_update(Flight *f, float dt)
         f->r_rate += (f->in_roll  * ROLL_RATE  * q - f->r_rate) * kr;
         f->y_rate += (f->in_yaw   * YAW_RATE   * q - f->y_rate) * ky;
 
-        /* Govde acisal hizlarini Euler acilarina cevir.
+        /* Convert body angular rates to Euler angle rates.
          *
-         * p_rate/q_rate/r_rate GOVDE eksenlerinde tanimlidir; bunlari
-         * dogrudan Euler acilarina eklemek yalnizca duz ucusta dogrudur.
-         * Yatisli ucakta yunuslama girdisi ucagi DONDURUR (yaw), cunku
-         * govde yunuslama ekseni artik dunya yataydan sapmistir. Bu cevrim
-         * olmadan agir govde her yatista burnunu asagi cevirip stall'a
-         * giriyordu; hafif jette kumanda otoritesi cok yuksek oldugu icin
-         * belirti gorunmuyordu. */
+         * p_rate/q_rate/r_rate are defined in BODY axes; adding them straight to
+         * the Euler angles is only correct in level flight. In a bank, a pitch
+         * input TURNS the aircraft (yaw), because the body pitch axis is no longer
+         * level with the world. Without this conversion the heavy airframe dropped
+         * its nose in every bank and stalled; the light jet had so much control
+         * authority that the symptom never showed. */
         {
             float sr = sinf(f->roll), cr = cosf(f->roll);
             float cp2 = cosf(f->pitch);
@@ -314,9 +318,9 @@ void flight_update(Flight *f, float dt)
         }
     }
 
-    /* Koordineli donus: yatista tasimanin yatay bileseni ucagi cevirir.
-     * Bu, kumanda kaynakli Euler cevriminden AYRI bir etkidir - yatis
-     * kumandaya dokunulmasa bile donusu surdurur. */
+    /* Coordinated turn: in a bank the horizontal component of lift turns the
+     * aircraft. This is SEPARATE from the control-driven Euler conversion - it
+     * keeps the turn going even with the controls left alone. */
     if (speed_for_turn > 1.0f) {
         float turn = (GRAVITY * tanf(clampf(f->roll, -1.2f, 1.2f)))
                      / speed_for_turn;
@@ -337,12 +341,12 @@ void flight_update(Flight *f, float dt)
     speed = len3(f->vel);
     f->airspeed = speed;
 
-    /* --- hucum acisi ---
+    /* --- angle of attack ---
      *
-     * Hiz vektoru ile burun arasindaki TOPLAM aciyi almak yanlisti: yan
-     * kayma (sideslip) da hucum acisina karisiyordu, bu yuzden her donuste
-     * sahte STALL uyarisi cikiyordu. Dogrusu hizi govde eksenlerine cevirip
-     * yalnizca DIKEY bileseni kullanmaktir. */
+     * Taking the TOTAL angle between the velocity and the nose was wrong:
+     * sideslip got mixed into the angle of attack, so every turn produced a
+     * false STALL warning. The right way is to rotate the velocity into body
+     * axes and use only the VERTICAL component. */
     if (speed > 1.0f) {
         float m[3][3];
         float vbx, vby, vbz;
@@ -354,34 +358,36 @@ void flight_update(Flight *f, float dt)
         vby = m[0][1] * f->vel[0] + m[1][1] * f->vel[1] + m[2][1] * f->vel[2];
         vbz = m[0][2] * f->vel[0] + m[1][2] * f->vel[1] + m[2][2] * f->vel[2];
 
-        (void)vbx;                  /* yan kayma tasimayi etkilemiyor */
+        (void)vbx;                  /* sideslip does not affect lift */
         f->aoa = atan2f(-vby, -vbz);
     } else {
         f->aoa = 0.0f;
     }
 
-    /* Stall uyarisi: kritik aci ANLIK asildiginda degil, bir sure uzerinde
-     * kalindiginda verilir. Manevrada aci kisa sureligine sinira degebilir;
-     * her dokunusta korna calmasi uyariyi anlamsizlastiriyordu. */
+    /* Stall warning: raised not the instant the critical angle is crossed but
+     * after staying above it for a while. In a manoeuvre the angle may touch
+     * the limit briefly; sounding the horn on every touch made the warning
+     * meaningless. */
     {
         float crit = STALL_ANGLE_RAD + f->flap * 0.06f;
 
         if (f->aoa > crit)
             f->stall_timer += dt;
         else
-            f->stall_timer -= dt * 2.0f;    /* cikis daha hizli */
+            f->stall_timer -= dt * 2.0f;    /* clears faster */
 
         f->stall_timer = clampf(f->stall_timer, 0.0f, 1.0f);
         f->stalled = (f->stall_timer > 0.28f);
     }
 
-    /* Statik kararlilik ve trim.
+    /* Static stability and trim.
      *
-     * Ucak hucum acisini SIFIRA degil, agirligini tasiyan TRIM acisina
-     * dogru cevirir. Sifira cekmek yanlisti: sifir hucum acisinda kanat
-     * tasima uretmez, ucak dusup hucum acisini buyutuyor ve sonunda takla
-     * atiyordu. Gercek ucakta bu dengeyi kuyruk ve trim kurar; sonuc,
-     * kumanda birakildiginda ucagin kendi kendine duz ucmasidir. */
+     * The aircraft turns its angle of attack not towards ZERO but towards the
+     * TRIM angle that carries its weight. Pulling it to zero was wrong: at
+     * zero angle of attack the wing makes no lift, the aircraft sinks, the
+     * angle grows and it eventually flipped over. On a real aircraft the tail
+     * and trim set this balance; the result is that the aircraft flies level
+     * by itself when the controls are released. */
     if (speed > 12.0f) {
         float q = 0.5f * AIR_DENSITY * speed * speed * WING_AREA_M2;
         float cl_needed;
@@ -389,11 +395,11 @@ void flight_update(Flight *f, float dt)
         float k = PITCH_STABILITY * dt;
         float damp = speed / CONTROL_REF_MS;
 
-        /* Yatista tasimanin DIKEY bileseni cos(roll) kadar azalir; ucagin
-         * ayni irtifayi tutmasi icin daha yuksek hucum acisinda trim olmasi
-         * gerekir. Bu terim yokken agir govde her yatista burnunu asagi
-         * cevirip stall'a giriyordu - hafif jet kutlesinde fark edilmiyordu
-         * cunku kumanda otoritesi kutleye gore cok yuksekti. */
+        /* In a bank the VERTICAL component of lift shrinks by cos(roll); to hold
+         * altitude the aircraft must trim to a higher angle of attack. Without
+         * this term the heavy airframe dropped its nose in every bank and stalled -
+         * at light-jet mass it went unnoticed because control authority was far
+         * higher than the mass. */
         {
             float cr = cosf(f->roll);
             float lift_factor = (cr > 0.20f) ? cr : 0.20f;
@@ -410,19 +416,20 @@ void flight_update(Flight *f, float dt)
         f->pitch -= (f->aoa - trim_aoa) * k * damp;
     }
 
-    /* --- kuvvetler --- */
+    /* --- forces --- */
     thrust = f->throttle * MAX_THRUST_N;
     if (f->fuel_kg <= 0.0f)
-        thrust = 0.0f;                      /* yakit bitti: suzulme */
+        thrust = 0.0f;                      /* out of fuel: gliding */
 
     lift = flight_lift_force(speed, f->aoa, f->flap, f->spoiler);
 
-    /* Kanat yuklemesi: sert donuste tasima agirligin katina cikar.
-     * Yapisal sinir asilirsa tasima kirpilir - ucak "cekmiyor". */
+    /* Wing loading: in a hard turn lift becomes a multiple of the weight.
+     * Past the structural limit lift is clipped - the aircraft "won't pull". */
     f->g_load = lift / (f->mass_kg * GRAVITY);
 
-    /* Sinir iki yonde de gecerli. Onceden yalnizca pozitif G kirpiliyordu;
-     * ters yonde -30 G'ye varan tasima serbest kaliyor ve ucagi firlatiyordu. */
+    /* The limit applies in both directions. Only positive G used to be
+     * clipped; negative lift of up to -30 G was left free and flung the
+     * aircraft. */
     if (f->g_load > G_LIMIT) {
         lift *= G_LIMIT / f->g_load;
         f->g_load = G_LIMIT;
@@ -438,21 +445,21 @@ void flight_update(Flight *f, float dt)
     for (i = 0; i < 3; i++)
         acc[i] = 0.0f;
 
-    /* itki: burun yonunde */
+    /* thrust: along the nose */
     for (i = 0; i < 3; i++)
         acc[i] += fwd[i] * thrust / f->mass_kg;
 
-    /* tasima: kanat duzlemine dik (yukari yon) */
+    /* lift: perpendicular to the wing plane (up direction) */
     for (i = 0; i < 3; i++)
         acc[i] += up[i] * lift / f->mass_kg;
 
-    /* surukleme: hareketin tersine */
+    /* drag: opposite to the motion */
     if (speed > 0.1f) {
         for (i = 0; i < 3; i++)
             acc[i] -= (f->vel[i] / speed) * drag / f->mass_kg;
     }
 
-    /* agirlik */
+    /* weight */
     acc[1] -= GRAVITY;
 
     for (i = 0; i < 3; i++) {
@@ -460,8 +467,8 @@ void flight_update(Flight *f, float dt)
         f->pos[i] += f->vel[i] * dt;
     }
 
-    /* --- kumanda yuzeyi animasyonu ---
-     * Yuzeyler hedefe sabit hizla ilerler; ani sicrama yok. */
+    /* --- control surface animation ---
+     * Surfaces move towards their target at a fixed rate; no jumps. */
     {
         float d = f->flap_target - f->flap;
         float step = FLAP_RATE * dt;
@@ -481,7 +488,7 @@ void flight_update(Flight *f, float dt)
         f->spoiler = clampf(f->spoiler, 0.0f, 1.0f);
     }
 
-    /* --- tekerlek animasyonu --- */
+    /* --- wheel animation --- */
     {
         float target = f->gear_down ? 1.0f : 0.0f;
         float step = dt * 1.2f;
@@ -495,10 +502,11 @@ void flight_update(Flight *f, float dt)
         }
     }
 
-    /* --- pist yuzeyi ile temas ---
-     * Pist alaninin uzerindeysek ve yeterince alcaksak tekerlekler yere
-     * basar: dikey hiz kesilir, yatay hizi surtunme yavaslatir. Burun ancak
-     * yeterli hizda kalkabilir (rotate hizi), boylece kalkis gercekci olur. */
+    /* --- contact with the runway surface ---
+     * Over the runway area and low enough, the wheels touch down: vertical
+     * speed is cut and friction slows the horizontal speed. The nose can only
+     * lift above a certain speed (rotate speed), which keeps the takeoff
+     * realistic. */
     {
         float deck_top = DECK_Y + (f->gear_down ? GEAR_HEIGHT : 0.4f);
         float dx = f->pos[0] - f->ground_ref[0];
@@ -515,20 +523,20 @@ void flight_update(Flight *f, float dt)
                 f->vel[1] = 0.0f;
             f->on_ground = 1;
 
-            /* yerdeyken burun asagi gitmez, yatis duzelir */
+            /* on the ground the nose does not go down and the bank levels out */
             if (f->pitch < 0.0f)
                 f->pitch = 0.0f;
             f->roll -= f->roll * (dt * 4.0f);
 
-            /* yeterli hiz yoksa burun kalkmaz */
+            /* without enough speed the nose stays down */
             horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
             if (horiz < ROTATE_SPEED_MS && f->pitch > 0.06f)
                 f->pitch = 0.06f;
 
-            /* Tekerlek surtunmesi ve fren.
-             * Surtunme sabit bir yavaslama uretir (mu * g); carpimsal
-             * yazilirsa hiza orantili olur ve ucak kalkis hizina hic
-             * ulasamaz - ilk yazimda bu hata vardi. */
+            /* Wheel friction and brakes.
+             * Friction produces a constant deceleration (mu * g); written as a
+             * multiplier it would be proportional to speed and the aircraft would
+             * never reach takeoff speed - the first version had exactly this bug. */
             {
                 float mu = ROLL_FRICTION
                            + ((f->brakes || f->spoiler > 0.5f) ? BRAKE_FRICTION : 0.0f);
@@ -545,8 +553,8 @@ void flight_update(Flight *f, float dt)
                 }
             }
         } else if (f->pos[1] < WATER_SAFE_ALT) {
-            /* Deniz yuzeyi: altina inilemez. Su, tekerlekten cok daha fazla
-             * direnc gosterir - ucak burada serbestce kayamaz. */
+            /* Sea surface: cannot go below it. Water resists far more than wheels -
+             * the aircraft cannot slide freely here. */
             float horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
 
             f->pos[1] = WATER_SAFE_ALT;
@@ -568,8 +576,8 @@ void flight_update(Flight *f, float dt)
             f->airborne = 1;
     }
 
-    /* --- tekerlek donusu (animasyon icin) ---
-     * Yerdeyken tekerlek hizla orantili doner; havadayken yavaslar. */
+    /* --- wheel rotation (for the animation) ---
+     * On the ground the wheels spin with speed; in the air they slow down. */
     {
         float horiz = sqrtf(f->vel[0] * f->vel[0] + f->vel[2] * f->vel[2]);
 
@@ -582,7 +590,7 @@ void flight_update(Flight *f, float dt)
             f->wheel_spin -= 6.28318531f;
     }
 
-    /* --- yakit --- */
+    /* --- fuel --- */
     f->fuel_kg -= f->throttle * FUEL_BURN_KGS * dt;
     if (f->fuel_kg < 0.0f)
         f->fuel_kg = 0.0f;
