@@ -114,6 +114,43 @@ void overlay_disc(float cx, float cy, float radius, color_t c, int alpha)
     }
 }
 
+/* Triangles with per-vertex opacity, sampled at pixel centres like the GPU:
+ * edge functions decide coverage, barycentrics interpolate the opacity. */
+void overlay_tris(const OvlPoint *p, int np, const unsigned short *idx, int ni,
+                  color_t c, int alpha)
+{
+    int t;
+
+    (void)np;
+    for (t = 0; t + 2 < ni; t += 3) {
+        const OvlPoint *a = &p[idx[t]], *b = &p[idx[t + 1]], *d = &p[idx[t + 2]];
+        float area = (b->x - a->x) * (d->y - a->y) - (b->y - a->y) * (d->x - a->x);
+        int x0, x1, y0, y1, x, y;
+
+        if (area > -1e-6f && area < 1e-6f)
+            continue;
+        x0 = (int)floorf(fminf(a->x, fminf(b->x, d->x)));
+        x1 = (int)ceilf(fmaxf(a->x, fmaxf(b->x, d->x)));
+        y0 = (int)floorf(fminf(a->y, fminf(b->y, d->y)));
+        y1 = (int)ceilf(fmaxf(a->y, fmaxf(b->y, d->y)));
+
+        for (y = y0; y <= y1; y++) {
+            for (x = x0; x <= x1; x++) {
+                float px = (float)x + 0.5f, py = (float)y + 0.5f;
+                float w0 = ((b->x - px) * (d->y - py) - (b->y - py) * (d->x - px)) / area;
+                float w1 = ((d->x - px) * (a->y - py) - (d->y - py) * (a->x - px)) / area;
+                float w2 = 1.0f - w0 - w1;
+                float op;
+
+                if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
+                    continue;
+                op = (w0 * a->a + w1 * b->a + w2 * d->a) * (float)alpha;
+                put(x, y, c, (int)(op + 0.5f));
+            }
+        }
+    }
+}
+
 int  overlay_init(void) { return 0; }
 void overlay_begin(void) { }
 void overlay_flush(void) { }
@@ -144,6 +181,9 @@ int main(int argc, char **argv)
     font_draw_text(40, 200, 1, "small label: SPEED km/h  PITCH", RGB(240, 245, 255));
     font_draw_text(40, 225, 2, "abcdefghijklmnopqrstuvwxyz", RGB(240, 245, 255));
     font_draw_text(40, 255, 2, "0123456789 %.,:-/()", RGB(240, 245, 255));
+    font_draw_text(40, 285, 2, "Speed 245 kt  Alt 3500 ft  Hdg 270\xc2\xb0", RGB(255, 214, 90));
+    font_draw_text(700, 30, 4, "Takeoff clearance", RGB(255, 255, 255));
+    font_draw_text(700, 90, 1, "Scale 1 label: flaps 15, gear down", RGB(240, 245, 255));
 
     /* --- gostergeler, cesitli yatis ve burun acilariyla --- */
     gauges_draw(253.0f, 423.0f, 0.0f, 0.0f);

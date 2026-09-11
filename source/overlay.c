@@ -17,15 +17,12 @@
  * bound render target"). Bu yuzden tum dikdortgenler bir tamponda toplanip
  * kare sonunda tek cizim cagrisiyla gonderilir. */
 
-/* Her harf ortalama 8 kucuk dortgen demek. HUD, gostergeler, gorev listesi,
- * mini harita ve menu ayni anda cizildiginde 1600 sinir yetmiyordu ve en son
- * cizilen (menu) sessizce dusuyordu. Sinir bellek acisindan ucuz: 5000
- * dortgen = 20000 vertex, 16-bit indeks sinirinin (65536) altinda. */
-/* Font artik glif basina ~3 kat dikdortgen uretiyor (scale2x) ve suni ufuk
- * satir taramasiyla ciziliyor; butce buna gore buyutuldu. */
-#define MAX_RECTS   14000
-#define MAX_VERTS   (MAX_RECTS * 4)
-#define MAX_INDICES (MAX_RECTS * 6)
+/* Budgets. Text is now triangle meshes (about 57 vertices and 250 indices
+ * per glyph), so vertices and indices are counted separately and indices are
+ * 32-bit: a full HUD with the menu open passes the 65536 limit of 16-bit
+ * indices. */
+#define MAX_VERTS   96000
+#define MAX_INDICES 240000
 
 typedef struct {
     float x, y, z;      /* clip uzayi konumu */
@@ -38,8 +35,10 @@ typedef struct {
 } OvlVertex;
 
 static OvlVertex *verts = NULL;
-static u16       *idx = NULL;
-static int        rect_count = 0;
+static u32       *idx = NULL;
+static int        vert_count = 0;
+static int        idx_count = 0;
+static int        prim_count = 0;    /* quads and meshes, for the profiler */
 static int        overflow = 0;
 
 static rsxVertexProgram   *ovl_vp = (rsxVertexProgram *)overlay_vpo;
@@ -52,24 +51,11 @@ static u32   fp_off = 0;
 int overlay_init(void)
 {
     u32 sz = 0;
-    int i;
 
     verts = (OvlVertex *)rsxMemalign(128, MAX_VERTS * sizeof(OvlVertex));
-    idx   = (u16 *)rsxMemalign(128, MAX_INDICES * sizeof(u16));
+    idx   = (u32 *)rsxMemalign(128, MAX_INDICES * sizeof(u32));
     if (verts == NULL || idx == NULL)
         return -1;
-
-    /* indeks duzeni sabittir: her dikdortgen iki ucgen */
-    for (i = 0; i < MAX_RECTS; i++) {
-        u16 v = (u16)(i * 4);
-
-        idx[i * 6 + 0] = v;
-        idx[i * 6 + 1] = (u16)(v + 1);
-        idx[i * 6 + 2] = (u16)(v + 2);
-        idx[i * 6 + 3] = (u16)(v + 2);
-        idx[i * 6 + 4] = (u16)(v + 1);
-        idx[i * 6 + 5] = (u16)(v + 3);
-    }
 
     rsxVertexProgramGetUCode(ovl_vp, &vp_ucode, &sz);
 
@@ -86,13 +72,15 @@ int overlay_init(void)
 
 void overlay_begin(void)
 {
-    rect_count = 0;
+    vert_count = 0;
+    idx_count = 0;
+    prim_count = 0;
     overflow = 0;
 }
 
 unsigned int overlay_rect_count(void)
 {
-    return (unsigned int)rect_count;
+    return (unsigned int)prim_count;
 }
 
 int overlay_overflowed(void)
@@ -112,7 +100,7 @@ static void push_quad(float cx, float cy, float hw, float hh, float angle,
     if (hw <= 0.0f || hh <= 0.0f)
         return;
 
-    if (rect_count >= MAX_RECTS) {
+    if (vert_count + 4 > MAX_VERTS || idx_count + 6 > MAX_INDICES) {
         overflow = 1;           /* tanidik olmayan eksik cizim yerine uyari */
         return;
     }
@@ -131,7 +119,7 @@ static void push_quad(float cx, float cy, float hw, float hh, float angle,
     b = (c & 0xFF) / 255.0f;
     a = alpha / 255.0f;
 
-    v = &verts[rect_count * 4];
+    v = &verts[vert_count];
 
     for (i = 0; i < 4; i++) {
         float px = cx + ox[i] * ca - oy[i] * sa;
@@ -148,7 +136,51 @@ static void push_quad(float cx, float cy, float hw, float hh, float angle,
         v[i].inner = inner;
     }
 
-    rect_count++;
+    idx[idx_count + 0] = (u32)vert_count;
+    idx[idx_count + 1] = (u32)vert_count + 1;
+    idx[idx_count + 2] = (u32)vert_count + 2;
+    idx[idx_count + 3] = (u32)vert_count + 2;
+    idx[idx_count + 4] = (u32)vert_count + 1;
+    idx[idx_count + 5] = (u32)vert_count + 3;
+    vert_count += 4;
+    idx_count += 6;
+    prim_count++;
+}
+
+void overlay_tris(const OvlPoint *p, int np, const unsigned short *tri, int ni,
+                  color_t c, int alpha)
+{
+    float r = ((c >> 16) & 0xFF) / 255.0f;
+    float g = ((c >> 8) & 0xFF) / 255.0f;
+    float b = (c & 0xFF) / 255.0f;
+    float a = alpha / 255.0f;
+    OvlVertex *v;
+    int i;
+
+    if (np <= 0 || ni <= 0)
+        return;
+    if (vert_count + np > MAX_VERTS || idx_count + ni > MAX_INDICES) {
+        overflow = 1;
+        return;
+    }
+
+    v = &verts[vert_count];
+    for (i = 0; i < np; i++) {
+        v[i].x = p[i].x / OVL_W * 2.0f - 1.0f;
+        v[i].y = 1.0f - p[i].y / OVL_H * 2.0f;
+        v[i].z = 0.0f;
+        v[i].r = r; v[i].g = g; v[i].b = b;
+        v[i].a = p[i].a * a;
+        v[i].shape = 0.0f;                  /* plain fill: alpha is the vertex's */
+        v[i].u = 0.0f; v[i].v = 0.0f;
+        v[i].inner = 0.0f;
+    }
+    for (i = 0; i < ni; i++)
+        idx[idx_count + i] = (u32)(vert_count + tri[i]);
+
+    vert_count += np;
+    idx_count += ni;
+    prim_count++;
 }
 
 static void push_rect_shaped(int x, int y, int w, int h, color_t c, int alpha,
@@ -207,8 +239,11 @@ void overlay_flush(void)
     gcmContextData *ctx = rsx3d_context();
     u32 off;
 
-    if (rect_count <= 0)
+    if (idx_count <= 0)
         return;
+
+    /* Glyph triangles come out of the triangulator in either winding. */
+    rsx3d_set_culling(0);
 
     /* saydamlik icin harmanlama, derinlik testi kapali (her sey en ustte) */
     rsxSetBlendEnable(ctx, GCM_TRUE);
@@ -250,8 +285,8 @@ void overlay_flush(void)
                                GCM_USER_CLIP_PLANE_DISABLE);
 
     rsxAddressToOffset(&idx[0], &off);
-    rsxDrawIndexArray(ctx, GCM_TYPE_TRIANGLES, off, rect_count * 6,
-                      GCM_INDEX_TYPE_16B, GCM_LOCATION_RSX);
+    rsxDrawIndexArray(ctx, GCM_TYPE_TRIANGLES, off, idx_count,
+                      GCM_INDEX_TYPE_32B, GCM_LOCATION_RSX);
 
     rsxSetBlendEnable(ctx, GCM_FALSE);
     rsxSetDepthTestEnable(ctx, GCM_TRUE);

@@ -1,67 +1,49 @@
 #include "font.h"
-#include "font_data.h"
+#include "font_vec.h"
 
-/* font_data.h iki tablo saglar:
- *   font8x8_basic[128][8]     U+0000 - U+007F
- *   font8x8_ext_latin[96][8]  U+00A0 - U+00FF  (ç Ç ö Ö ü Ü buradan gelir)
- * Turkcede eksik kalan 6 glif asagida elle cizildi.
- * Her byte bir satir; en dusuk bit (0x01) en soldaki piksel.
+/* Text is drawn as triangle meshes, not from a texture: tex2D still returns
+ * black on RSX, and the previous 8x8 bitmap looked like what it was.
  *
- * Cizimde glifler once 16x16'ya buyutulur (scale2x), sonra yarim piksel
- * boyutunda dikdortgenlerle cizilir. Boylece metnin fiziksel boyutu ayni
- * kalirken kose ve capraz hatlar yumusar - 8x8 bitmap'in sert "pixel"
- * gorunumu bu sekilde kirilir. */
+ * tools/make_font.py flattens and triangulates every glyph of Nunito ahead
+ * of time (source/font_vec.h). Here each glyph becomes two rings of points:
+ * the outline pushed half a pixel inward (opacity 1) and half a pixel
+ * outward (opacity 0). The fill uses the inner ring; the strip between the
+ * rings fades out across one pixel. The GPU interpolates that opacity, which
+ * gives antialiased edges without MSAA and without a texture. */
 
-/* Turkce glifler.
- *
- * Standart 8x8 tabloda buyuk harfler 0-6. satirlari kaplar. Ustune isaret
- * gelen harflerde (İ Ğ Ö Ü) isaret 0. satira, govde 2-7. satirlara alinir;
- * aksi halde govde kisa kalir ve harf kucuk harf gibi gorunur - ilk yazimda
- * "ALTITUDE" ekranda "ALTITUDE" cikiyordu. */
+/* Top of the capitals sits at y; the baseline is one cap height below. */
+#define BASELINE_PER_SCALE (FONTV_CAP_HEIGHT * FONT_EM_PER_SCALE)
 
-static const char font_tr_gd[8]  = { 0x3C, 0x00, 0x3C, 0x66, 0x60, 0x6E, 0x66, 0x3C }; /* Ğ */
-static const char font_tr_gdl[8] = { 0x3C, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x3C }; /* ğ */
-static const char font_tr_id[8]  = { 0x18, 0x00, 0x7E, 0x18, 0x18, 0x18, 0x18, 0x7E }; /* İ */
-static const char font_tr_idz[8] = { 0x00, 0x00, 0x1C, 0x18, 0x18, 0x18, 0x3C, 0x00 }; /* ı */
-static const char font_tr_sc[8]  = { 0x3C, 0x66, 0x06, 0x3C, 0x60, 0x66, 0x3C, 0x18 }; /* Ş */
-static const char font_tr_scl[8] = { 0x00, 0x00, 0x3E, 0x06, 0x3C, 0x60, 0x3E, 0x18 }; /* ş */
+/* Width of the antialiasing ramp in pixels. One pixel is the right amount:
+ * wider looks soft, narrower brings the stair steps back. */
+#define EDGE_PX 1.0f
 
-/* Ö Ü Ç de elle cizildi: ext_latin tablosundaki bicimlerinde isaret govdeye
- * bitisik geliyor ve 16x16'ya buyutulunce lekeye donusuyor. */
-static const char font_tr_od[8]  = { 0x66, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x3C }; /* Ö */
-static const char font_tr_odl[8] = { 0x66, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x3C }; /* ö */
-static const char font_tr_ud[8]  = { 0x66, 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C }; /* Ü */
-static const char font_tr_udl[8] = { 0x66, 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C }; /* ü */
-static const char font_tr_cc[8]  = { 0x00, 0x3C, 0x66, 0x06, 0x06, 0x66, 0x3C, 0x18 }; /* Ç */
-static const char font_tr_ccl[8] = { 0x00, 0x00, 0x3C, 0x66, 0x06, 0x66, 0x3C, 0x18 }; /* ç */
+/* Largest glyph in font_vec.h has 67 points and 195 fill indices. */
+#define MAX_GLYPH_PTS 128
+#define MAX_GLYPH_IDX (MAX_GLYPH_PTS * 3 + MAX_GLYPH_PTS * 6)
 
-static const char *glyph_for(unsigned int cp)
+static const FontVGlyph *glyph_for(unsigned int cp)
 {
-    switch (cp) {
-    case 0x011E: return font_tr_gd;
-    case 0x011F: return font_tr_gdl;
-    case 0x0130: return font_tr_id;
-    case 0x0131: return font_tr_idz;
-    case 0x015E: return font_tr_sc;
-    case 0x015F: return font_tr_scl;
-    case 0x00D6: return font_tr_od;
-    case 0x00F6: return font_tr_odl;
-    case 0x00DC: return font_tr_ud;
-    case 0x00FC: return font_tr_udl;
-    case 0x00C7: return font_tr_cc;
-    case 0x00E7: return font_tr_ccl;
-    default: break;
+    int lo = 0, hi = FONTV_GLYPHS - 1;
+
+    /* ASCII is stored first and in order, so it needs no search */
+    if (cp >= 0x20 && cp < 0x7F)
+        return &fontv_glyphs[cp - 0x20];
+
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+
+        if (fontv_glyphs[mid].cp == cp)
+            return &fontv_glyphs[mid];
+        if (fontv_glyphs[mid].cp < cp)
+            lo = mid + 1;
+        else
+            hi = mid - 1;
     }
-
-    if (cp < 128)
-        return font8x8_basic[cp];
-    if (cp >= 0x00A0 && cp <= 0x00FF)
-        return font8x8_ext_latin[cp - 0x00A0];
-
-    return font8x8_basic['?'];
+    return &fontv_glyphs['?' - 0x20];
 }
 
-/* Bir UTF-8 kod noktasi okur, isaretciyi ilerletir. Bozuk bayt icin '?' doner. */
+/* Reads one UTF-8 code point and advances the pointer; '?' for bad bytes. */
 static unsigned int utf8_next(const char **s)
 {
     const unsigned char *p = (const unsigned char *)*s;
@@ -99,226 +81,75 @@ static unsigned int utf8_next(const char **s)
     return cp;
 }
 
-static int utf8_count(const char *s)
-{
-    int n = 0;
-
-    while (*s != '\0') {
-        utf8_next(&s);
-        n++;
-    }
-    return n;
-}
-
 int font_text_width(const char *utf8, int scale)
 {
-    return utf8_count(utf8) * FONT_CELL * scale;
+    const char *s = utf8;
+    float em = FONT_EM_PER_SCALE * (float)scale;
+    float w = 0.0f;
+
+    while (*s != '\0')
+        w += glyph_for(utf8_next(&s))->advance * em;
+    return (int)(w + 0.5f);
 }
 
-/* 8x8 glifi 16x16'ya buyutur (scale2x / EPX).
- *
- * Her kaynak piksel P dort alt piksele acilir. Komsular esitse kose alt
- * pikseli komsunun degerini alir; boylece merdiven basamaklari kirilir ve
- * capraz hatlar duz gorunur. Bitmap ikili oldugu icin bu kural burada
- * "dis koseleri yuvarla, ic koseleri doldur" anlamina gelir. */
-static int px(const char *g, int r, int c)
+static void draw_glyph(const FontVGlyph *g, float x, float base, float em,
+                       color_t c)
 {
-    if (r < 0 || r > 7 || c < 0 || c > 7)
-        return 0;
-    return (((unsigned char)g[r] >> c) & 1);
-}
+    static OvlPoint pts[MAX_GLYPH_PTS * 2];
+    static unsigned short tri[MAX_GLYPH_IDX];
+    const float h = EDGE_PX * 0.5f;
+    unsigned int n = g->npt, k, e, start;
+    int ni = 0;
 
-static void expand2x(const char *g, unsigned short out[16])
-{
-    int r, c;
+    if (n == 0 || n > MAX_GLYPH_PTS)
+        return;
 
-    for (r = 0; r < 16; r++)
-        out[r] = 0;
+    for (k = 0; k < n; k++) {
+        const float *p = fontv_pts[g->pt0 + k];
+        const float *m = fontv_miter[g->pt0 + k];
+        float px = x + p[0] * em, py = base - p[1] * em;
+        float mx = m[0] * h, my = -m[1] * h;       /* font y is up, screen y down */
 
-    for (r = 0; r < 8; r++) {
-        for (c = 0; c < 8; c++) {
-            int p = px(g, r, c);
-            int a = px(g, r - 1, c);    /* ust */
-            int b = px(g, r, c + 1);    /* sag */
-            int d = px(g, r, c - 1);    /* sol */
-            int e = px(g, r + 1, c);    /* alt */
-            int q[4];                   /* sol-ust, sag-ust, sol-alt, sag-alt */
-            int i;
+        pts[k].x = px - mx;     pts[k].y = py - my;     pts[k].a = 1.0f;
+        pts[n + k].x = px + mx; pts[n + k].y = py + my; pts[n + k].a = 0.0f;
+    }
 
-            q[0] = q[1] = q[2] = q[3] = p;
+    for (k = 0; k < g->nidx; k++)
+        tri[ni++] = fontv_idx[g->idx0 + k];
 
-            if (d == a && d != e && a != b) q[0] = a;
-            if (a == b && a != d && b != e) q[1] = b;
-            if (e == d && e != b && d != a) q[2] = d;
-            if (b == e && b != a && e != d) q[3] = e;
+    /* the fading strip, one quad per outline edge */
+    start = 0;
+    for (e = 0; e < g->nend; e++) {
+        unsigned int end = fontv_end[g->end0 + e];
 
-            for (i = 0; i < 4; i++) {
-                if (q[i]) {
-                    int rr = r * 2 + (i >> 1);
-                    int cc = c * 2 + (i & 1);
+        for (k = start; k < end; k++) {
+            unsigned int j = (k + 1 < end) ? k + 1 : start;
 
-                    out[rr] |= (unsigned short)(1u << cc);
-                }
-            }
+            tri[ni++] = (unsigned short)k;
+            tri[ni++] = (unsigned short)j;
+            tri[ni++] = (unsigned short)(n + j);
+            tri[ni++] = (unsigned short)k;
+            tri[ni++] = (unsigned short)(n + j);
+            tri[ni++] = (unsigned short)(n + k);
         }
-    }
-}
-
-/* Isaretli Turkce harfler 16x16 uzayda BIRLESTIRILIR.
- *
- * 8x8'lik hucreye hem tam boy govde hem ustteki isaret sigmiyor; govdeyi
- * kisaltinca harf kucuk harf gibi gorunuyordu (Ğ -> ğ). Cizim zaten 16x16'da
- * yapildigi icin taban harf orada asagi kaydirilip isaret ust iki satira
- * yaziliyor. Boylece govde diger buyuk harflerle ayni boyda kaliyor. */
-
-#define MARK_NONE  0
-#define MARK_DIA   1        /* iki nokta: Ö Ü ö ü */
-#define MARK_BREVE 2        /* yay: Ğ ğ */
-#define MARK_DOT   3        /* tek genis nokta: İ */
-#define MARK_CED   4        /* alttaki kuyruk: Ş Ç ş ç */
-
-static int tr_base(unsigned int cp, int *mark)
-{
-    switch (cp) {
-    case 0x011E: *mark = MARK_BREVE; return 'G';
-    case 0x011F: *mark = MARK_BREVE; return 'g';
-    case 0x0130: *mark = MARK_DOT;   return 'I';
-    case 0x00D6: *mark = MARK_DIA;   return 'O';
-    case 0x00F6: *mark = MARK_DIA;   return 'o';
-    case 0x00DC: *mark = MARK_DIA;   return 'U';
-    case 0x00FC: *mark = MARK_DIA;   return 'u';
-    case 0x015E: *mark = MARK_CED;   return 'S';
-    case 0x015F: *mark = MARK_CED;   return 's';
-    case 0x00C7: *mark = MARK_CED;   return 'C';
-    case 0x00E7: *mark = MARK_CED;   return 'c';
-    default:     *mark = MARK_NONE;  return -1;
-    }
-}
-
-/* Birlestirilmis glifi uretir; cp isaretli bir harf degilse 0 doner. */
-static int tr_compose(unsigned int cp, unsigned short out[16])
-{
-    unsigned short base[16];
-    int mark;
-    int ch = tr_base(cp, &mark);
-    int r;
-
-    if (ch < 0)
-        return 0;
-
-    expand2x(font8x8_basic[ch], base);
-
-    for (r = 0; r < 16; r++)
-        out[r] = 0;
-
-    if (mark == MARK_CED) {
-        /* govde yerinde kalir, kuyruk en alta yazilir */
-        for (r = 0; r < 14; r++)
-            out[r] = base[r];
-        out[14] = 0x01C0;
-        out[15] = 0x0180;
-        return 1;
+        start = end;
     }
 
-    /* govde iki satir asagi kayar, ust iki satir isarete kalir */
-    for (r = 0; r < 14; r++)
-        out[r + 2] = base[r];
-
-    switch (mark) {
-    /* Isaretler govdenin ust kenarindan disa tasar: govde ust satiri
-     * 16x16'da 4..11 bitlerini kaplar, bu yuzden noktalar 2-3 ve 12-13
-     * bitlerine yaziliyor. Ic tarafa konunca govdeye yapisip okunmuyordu. */
-    case MARK_DIA:
-        out[0] = 0x300C;
-        out[1] = 0x300C;
-        break;
-    case MARK_BREVE:
-        out[0] = 0x300C;
-        out[1] = 0x0FF0;
-        break;
-    case MARK_DOT:
-        out[0] = 0x03C0;
-        out[1] = 0x03C0;
-        break;
-    default:
-        break;
-    }
-    return 1;
+    overlay_tris(pts, (int)(n * 2), tri, ni, c, 255);
 }
 
 void font_draw_text(int x, int y, int scale, const char *utf8, color_t c)
 {
     const char *s = utf8;
-    float ps = (float)scale * 0.5f;     /* buyutulmus piksel boyutu */
-
-    /* scale 1'de buyutulmus piksel yarim piksel eder; MSAA kapali oldugu
-     * icin bu boyutta dikdortgenler rasterizasyonda kaybolur. Kucuk
-     * etiketler bu yuzden klasik 8x8 yolundan cizilir. */
-    if (scale < 2) {
-        while (*s != '\0') {
-            const char *glyph = glyph_for(utf8_next(&s));
-            int row;
-
-            for (row = 0; row < 8; row++) {
-                unsigned char bits = (unsigned char)glyph[row];
-                int col = 0;
-
-                while (col < 8) {
-                    int run;
-
-                    if ((bits & (1 << col)) == 0) {
-                        col++;
-                        continue;
-                    }
-                    run = 0;
-                    while (col + run < 8 && (bits & (1 << (col + run))) != 0)
-                        run++;
-
-                    overlay_fill_rect(x + col * scale, y + row * scale,
-                                      run * scale, scale, c);
-                    col += run;
-                }
-            }
-            x += FONT_CELL * scale;
-        }
-        return;
-    }
+    float em = FONT_EM_PER_SCALE * (float)scale;
+    float base = (float)y + BASELINE_PER_SCALE * (float)scale;
+    float pen = (float)x;
 
     while (*s != '\0') {
-        unsigned int cp = utf8_next(&s);
-        const char *glyph = glyph_for(cp);
-        unsigned short big[16];
-        int row;
+        const FontVGlyph *g = glyph_for(utf8_next(&s));
 
-        if (!tr_compose(cp, big))
-            expand2x(glyph, big);
-
-        for (row = 0; row < 16; row++) {
-            unsigned int bits = big[row];
-            int col = 0;
-
-            /* ayni satirdaki bitisik pikselleri tek dikdortgende ciz */
-            while (col < 16) {
-                int run;
-                float rx, ry;
-
-                if ((bits & (1u << col)) == 0) {
-                    col++;
-                    continue;
-                }
-                run = 0;
-                while (col + run < 16 && (bits & (1u << (col + run))) != 0)
-                    run++;
-
-                /* Yarim piksel cozunurluk gerektigi icin donmemis rot_rect
-                 * kullanilir; fill_rect yalnizca tam piksel alir. */
-                rx = (float)x + ((float)col + run * 0.5f) * ps;
-                ry = (float)y + ((float)row + 0.5f) * ps;
-                overlay_rot_rect(rx, ry, run * ps, ps, 0.0f, c, 255);
-                col += run;
-            }
-        }
-        x += FONT_CELL * scale;
+        draw_glyph(g, pen, base, em, c);
+        pen += g->advance * em;
     }
 }
 

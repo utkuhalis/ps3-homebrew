@@ -42,6 +42,19 @@ void overlay_soft_blob(int x, int y, int w, int h, color_t c, int alpha);
 void overlay_rot_rect(float cx, float cy, float w, float h, float angle,
                       color_t c, int alpha);
 
+/* A point of an arbitrary triangle mesh, in virtual 1280x720 coordinates.
+ * a is per-vertex opacity (0..1); the GPU interpolates it across the
+ * triangle, which is how glyph edges get their antialiasing ramp. */
+typedef struct {
+    float x, y, a;
+} OvlPoint;
+
+/* Arbitrary triangles, drawn in submission order with everything else.
+ * idx holds ni indices into p (three per triangle). alpha scales every
+ * vertex's own opacity. */
+void overlay_tris(const OvlPoint *p, int np, const unsigned short *idx, int ni,
+                  color_t c, int alpha);
+
 /* Halka (gosterge cercevesi) ve dolu daire */
 void overlay_ring(float cx, float cy, float radius, float thickness,
                   color_t c, int alpha);
